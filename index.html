@@ -444,20 +444,33 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
   opacity:.1;filter:saturate(.35) blur(1px);}
 .rsvp-bg::after{content:'';position:absolute;inset:0;
   background:linear-gradient(rgba(16,30,23,.5),rgba(16,30,23,.9));}
-.rform{max-width:440px;margin:0 auto;position:relative;z-index:2;}
-.fld{margin-bottom:22px;}
-.fld>label,.fld legend{display:block;font-family:var(--sans);font-size:9px;letter-spacing:.28em;
-  text-transform:uppercase;color:var(--gold-light);margin-bottom:9px;padding:0;}
-.fld input[type=text],.fld input[type=number],.fld textarea{width:100%;background:transparent;
-  border:0;border-bottom:1px solid rgba(247,241,231,.3);color:var(--cream);
-  font-family:var(--serif);font-size:1.04rem;padding:10px 2px;min-height:44px;
-  transition:border-color .3s;}
-.fld input:focus,.fld textarea:focus{outline:none;border-color:var(--gold);}
-.fld textarea{resize:vertical;min-height:64px;}
+.rform{max-width:520px;margin:0 auto;position:relative;z-index:2;
+  padding:38px 34px 34px;border:1px solid rgba(176,141,87,.38);
+  background:rgba(16,30,23,.62);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  box-shadow:0 30px 60px -30px rgba(0,0,0,.6);}
+.rform::before{content:'';position:absolute;inset:6px;border:1px solid rgba(176,141,87,.16);
+  pointer-events:none;}
+.fld{margin-bottom:24px;position:relative;}
+.fld>label,.fld legend{display:block;font-family:var(--sans);font-size:10px;letter-spacing:.26em;
+  text-transform:uppercase;color:var(--gold-light);margin-bottom:10px;padding:0;}
+.fld input[type=text],.fld input[type=number],.fld textarea{width:100%;
+  background:rgba(247,241,231,.05);border:1px solid rgba(247,241,231,.16);
+  color:var(--cream);font-family:var(--serif);font-size:1.08rem;padding:12px 14px;
+  min-height:48px;transition:border-color .3s,background .3s;}
+.fld input::placeholder,.fld textarea::placeholder{color:rgba(247,241,231,.35);font-style:italic;}
+.fld input:focus,.fld textarea:focus{outline:none;border-color:var(--gold);
+  background:rgba(247,241,231,.08);}
+.fld textarea{resize:vertical;min-height:88px;line-height:1.5;}
 .fld fieldset{border:0;margin:0;padding:0;}
-.fld label.opt{display:flex;align-items:center;gap:12px;min-height:48px;padding:4px 0;
-  margin-bottom:0;cursor:pointer;font-family:var(--serif);font-size:1rem;
-  letter-spacing:normal;text-transform:none;color:var(--cream-warm);}
+.opts{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.fld label.opt{display:flex;align-items:center;gap:12px;min-height:56px;padding:12px 14px;
+  margin-bottom:0;cursor:pointer;font-family:var(--serif);font-size:1.02rem;line-height:1.3;
+  letter-spacing:normal;text-transform:none;color:var(--cream-warm);
+  border:1px solid rgba(247,241,231,.16);background:rgba(247,241,231,.04);
+  transition:border-color .3s,background .3s,color .3s;}
+.fld label.opt:hover{border-color:rgba(176,141,87,.6);}
+.fld label.opt:has(input:checked){border-color:var(--gold);background:rgba(176,141,87,.14);
+  color:var(--cream);}
 .opt input{appearance:none;-webkit-appearance:none;width:16px;height:16px;
   border:1px solid rgba(247,241,231,.42);border-radius:50%;flex:0 0 auto;position:relative;
   cursor:pointer;transition:.25s;margin:0;}
@@ -465,6 +478,12 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
 .opt input:checked::after{content:'';position:absolute;inset:3px;border-radius:50%;
   background:var(--gold);animation:popIn .3s var(--ease-back);}
 #fld-guests{transition:opacity .35s ease;}
+.fld .hint{display:block;margin-top:7px;font-family:var(--serif);font-style:italic;
+  font-size:.92rem;color:rgba(247,241,231,.5);}
+@media (max-width:600px){
+  .rform{padding:28px 20px 26px;}
+  .opts{grid-template-columns:1fr;}
+}
 .btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;
   margin-top:28px;min-height:54px;padding:16px 20px;background:var(--burgundy);
   border:1px solid var(--burgundy);color:var(--cream);font-family:var(--sans);
@@ -481,7 +500,8 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
 .rsvp-done .tickmark svg{width:24px;height:24px;color:var(--gold-light);}
 .rsvp-done p{color:var(--cream);font-size:1.1rem;font-style:italic;margin:0;}
 .rsvp-by{text-align:center;font-family:var(--sans);font-size:9px;letter-spacing:.24em;
-  text-transform:uppercase;color:rgba(247,241,231,.5);margin:26px 0 0;}
+  text-transform:uppercase;color:rgba(247,241,231,.5);margin:24px 0 0;padding-top:20px;
+  border-top:1px solid rgba(176,141,87,.2);}
 .rsvp-by strong{color:var(--gold-light);font-weight:400;}
 
 /* ========================= PAGER ========================= */
@@ -1119,34 +1139,36 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
     <form class="rform" id="rsvp-form" novalidate>
       <div class="fld">
         <label for="r-name">Your name</label>
-        <input type="text" id="r-name" name="name" autocomplete="name" required>
+        <input type="text" id="r-name" name="name" autocomplete="name" required placeholder="As written on your invitation">
       </div>
       <div class="fld">
         <fieldset>
           <legend>Are you coming?</legend>
-          <label class="opt tap"><input type="radio" name="attending" value="yes"> Joyfully, we would not miss it</label>
-          <label class="opt tap"><input type="radio" name="attending" value="no"> Regretfully, we cannot make it</label>
+          <div class="opts">
+            <label class="opt tap"><input type="radio" name="attending" value="yes"> Joyfully, we would not miss it</label>
+            <label class="opt tap"><input type="radio" name="attending" value="no"> Regretfully, we cannot make it</label>
+          </div>
         </fieldset>
       </div>
       <div class="fld" id="fld-guests">
         <label for="r-guests">How many of you are coming, in total?</label>
-        <input type="number" id="r-guests" name="guests" min="1" max="12" step="1" inputmode="numeric">
+        <input type="number" id="r-guests" name="guests" min="1" max="12" step="1" inputmode="numeric" placeholder="Including yourself">
+        <span class="hint">Your invitation shows the seats we have set aside for you.</span>
       </div>
       <div class="fld">
         <label for="r-diet">Any dietary restrictions or allergies?</label>
-        <input type="text" id="r-diet" name="diet">
+        <input type="text" id="r-diet" name="diet" placeholder="Leave blank if none">
       </div>
       <div class="fld">
         <label for="r-note">A note for us (optional)</label>
-        <textarea id="r-note" name="note" rows="2"></textarea>
+        <textarea id="r-note" name="note" rows="3" placeholder="A few words, if you like"></textarea>
       </div>
       <button class="btn tap" type="submit">
         Send our reply
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:14px;height:14px"><path d="M4 12h15"/><path d="M13 6l6 6-6 6"/></svg>
       </button>
       <p id="rsvp-msg" role="status" aria-live="polite"></p>
-      <p class="rsvp-by">Responses go straight to <strong>Nelson &amp; Chanel</strong>
-        <span class="todo">Needs endpoint</span></p>
+      <p class="rsvp-by">Responses go straight to <strong>Nelson &amp; Chanel</strong></p>
     </form>
   </div>
 </section>
