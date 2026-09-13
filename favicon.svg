@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#16281F"/>
+  <circle cx="32" cy="32" r="25" fill="none" stroke="#B08D57" stroke-width="1.2" opacity=".9"/>
+  <circle cx="32" cy="32" r="21.5" fill="none" stroke="#B08D57" stroke-width=".6" opacity=".45"/>
+  <text x="32" y="41" text-anchor="middle" font-family="'Cormorant Garamond','Iowan Old Style',Georgia,'Times New Roman',serif" font-size="26" fill="#CDAE7C" letter-spacing="1">N<tspan font-style="italic" font-size="20" dy="-1">&amp;</tspan><tspan dy="1">C</tspan></text>
+</svg>
