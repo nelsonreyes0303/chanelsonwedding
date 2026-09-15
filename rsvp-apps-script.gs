@@ -8,10 +8,10 @@
  * Copy the Web app URL into RSVP_ENDPOINT in index.html.
  *
  * Every submission is appended as one row to the RSVP_SHEET tab.
- * The tab is created with headers on first use if it does not exist.
+ * The tab is created, and its headers written, on first use if needed.
  */
 
-var RSVP_SHEET = 'RSVP Responses';
+var RSVP_SHEET = 'Website RSVP';
 
 var COLUMNS = [
   'Received (Manila)',
@@ -49,9 +49,9 @@ function doGet() {
 
 function getSheet_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(RSVP_SHEET);
-  if (!sheet) {
-    sheet = ss.insertSheet(RSVP_SHEET);
+  var sheet = ss.getSheetByName(RSVP_SHEET) || ss.insertSheet(RSVP_SHEET);
+  // A tab that already exists but is still blank needs its headers too.
+  if (sheet.getLastRow() === 0) {
     sheet.appendRow(COLUMNS);
     sheet.getRange(1, 1, 1, COLUMNS.length).setFontWeight('bold');
     sheet.setFrozenRows(1);
