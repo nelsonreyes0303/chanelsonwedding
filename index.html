@@ -10,7 +10,7 @@
 <link rel="apple-touch-icon" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Jost:wght@200;300;400;500&family=Pinyon+Script&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Jost:wght@200;300;400;500&family=Great+Vibes&display=swap" rel="stylesheet">
 <style>
 /* ========================= TOKENS ========================= */
 :root{
@@ -21,7 +21,7 @@
   --ink:#241E1B; --muted:#6E635C; --muted-light:#A79A8E;
   --serif:'Cormorant Garamond','Iowan Old Style',Georgia,serif;
   --sans:'Jost','Avenir Next','Helvetica Neue',Arial,sans-serif;
-  --script:'Pinyon Script','Apple Chancery',cursive;
+  --script:'Great Vibes','Apple Chancery',cursive;
   --ease:cubic-bezier(.22,.68,.16,1);
   --ease-back:cubic-bezier(.34,1.42,.64,1);
   --bar:54px;
@@ -209,11 +209,16 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
 .home-pre{font-family:var(--sans);font-size:9.5px;letter-spacing:.42em;text-transform:uppercase;
   color:rgba(247,241,231,.76);margin:0 0 14px;opacity:0;
   animation:rise 1s var(--ease) .2s forwards;}
-.home-names{font-family:var(--script);font-size:clamp(3.1rem,15vw,5.4rem);line-height:.95;
-  margin:0;color:#fff;text-shadow:0 3px 30px rgba(0,0,0,.45);opacity:0;
-  animation:rise 1.2s var(--ease) .38s forwards;}
-.home-names span{display:block;font-family:var(--serif);font-size:.22em;font-style:italic;
-  letter-spacing:.1em;color:var(--gold-light);margin:.1em 0;text-shadow:none;}
+.home-names{font-family:var(--script);font-size:clamp(3.3rem,16vw,5.9rem);line-height:1.02;
+  margin:0;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.34),0 5px 26px rgba(0,0,0,.44);
+  opacity:0;animation:rise 1.2s var(--ease) .38s forwards;}
+/* The "and" reads as a rule between the names rather than a third line. */
+.home-names span{display:flex;align-items:center;justify-content:center;gap:.85em;
+  font-family:var(--serif);font-size:.19em;font-style:italic;letter-spacing:.16em;
+  color:var(--gold-light);margin:.12em 0 .06em;text-shadow:none;}
+.home-names span::before,.home-names span::after{content:"";height:1px;
+  width:clamp(22px,8vw,52px);background:linear-gradient(90deg,transparent,rgba(205,174,124,.8));}
+.home-names span::after{background:linear-gradient(90deg,rgba(205,174,124,.8),transparent);}
 .home-date{font-family:var(--sans);font-size:clamp(9.5px,2.6vw,11px);letter-spacing:.32em;
   text-transform:uppercase;color:rgba(247,241,231,.92);margin:16px 0 0;opacity:0;
   animation:rise 1s var(--ease) .72s forwards;}
@@ -482,6 +487,12 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
 .opt input:checked::after{content:'';position:absolute;inset:3px;border-radius:50%;
   background:var(--gold);animation:popIn .3s var(--ease-back);}
 #fld-guests{transition:opacity .35s ease;}
+#fld-names[hidden]{display:none;}
+.gname-row{display:flex;align-items:center;gap:12px;margin-bottom:9px;}
+.gname-row:last-child{margin-bottom:0;}
+.gname-no{flex:0 0 auto;width:22px;font-family:var(--sans);font-size:10px;
+  letter-spacing:.1em;color:rgba(205,174,124,.75);text-align:right;}
+.gname-row input{flex:1 1 auto;min-height:44px;padding:10px 14px;font-size:1.02rem;}
 .fld .hint{display:block;margin-top:7px;font-family:var(--serif);font-style:italic;
   font-size:.92rem;color:rgba(247,241,231,.5);}
 @media (max-width:600px){
@@ -1154,6 +1165,11 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
         <input type="number" id="r-guests" name="guests" min="1" max="12" step="1" inputmode="numeric" placeholder="Including yourself">
         <span class="hint">Your invitation shows the seats we have set aside for you.</span>
       </div>
+      <div class="fld" id="fld-names" hidden>
+        <label id="names-label">Who is coming with you?</label>
+        <div id="guest-names" role="group" aria-labelledby="names-label"></div>
+        <span class="hint">You are already counted &mdash; please name the rest of your party.</span>
+      </div>
       <div class="fld">
         <label for="r-diet">Any dietary restrictions or allergies?</label>
         <input type="text" id="r-diet" name="diet" placeholder="Leave blank if none">
@@ -1563,8 +1579,34 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
 
   /* -------------------------------------------------------------- RSVP FORM */
   (function rsvp() {
-    var form = $('#rsvp-form'), msg = $('#rsvp-msg'), guests = $('#fld-guests');
+    var form = $("#rsvp-form"), msg = $("#rsvp-msg"), guests = $("#fld-guests");
+    var namesFld = $("#fld-names"), namesBox = $("#guest-names");
     if (!form) return;
+
+    /* One row per companion. The sender is guest 1, so a party of n needs
+       n-1 rows. Values already typed survive a change to the total. */
+    function drawNames() {
+      var coming = ($("input[name=attending]:checked", form) || {}).value === "yes";
+      var total  = parseInt($("#r-guests").value, 10);
+      var rows   = (coming && total > 1) ? Math.min(total, 12) - 1 : 0;
+      var kept   = $$(".gname", namesBox).map(function (i) { return i.value; });
+
+      namesFld.hidden = rows === 0;
+      if (rows === 0) { namesBox.innerHTML = ""; return; }
+
+      var html = "";
+      for (var i = 0; i < rows; i++) {
+        html += '<div class="gname-row"><span class="gname-no">' + (i + 2) +
+          '</span><input type="text" class="gname" autocomplete="off" ' +
+          'aria-label="Name of guest ' + (i + 2) + '" placeholder="Full name"></div>';
+      }
+      namesBox.innerHTML = html;
+      $$(".gname", namesBox).forEach(function (input, i) {
+        if (kept[i]) input.value = kept[i];
+      });
+    }
+
+    $("#r-guests").addEventListener("input", drawNames);
 
     function say(text, bad) {
       msg.textContent = text;
@@ -1577,6 +1619,7 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
         guests.style.opacity = coming ? '1' : '.35';
         guests.style.pointerEvents = coming ? '' : 'none';
         if (!coming) $('#r-guests').value = '';
+        drawNames();
       });
     });
 
@@ -1596,10 +1639,18 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
       if (!name) { say('Please tell us your name.', true); $('#r-name').focus(); return; }
       if (!att)  { say('Please let us know if you can join us.', true); return; }
 
+      var party = $$('.gname', namesBox).map(function (i) { return i.value.trim(); });
+      if (!namesFld.hidden && party.some(function (n) { return !n; })) {
+        say('Please name everyone coming with you.', true);
+        ($$('.gname', namesBox).filter(function (i) { return !i.value.trim(); })[0] || {}).focus();
+        return;
+      }
+
       var data = {
         name: name,
         attending: att.value === 'yes' ? 'Yes' : 'No',
         guests: $('#r-guests').value || '',
+        party: party.length ? [name].concat(party).join(', ') : '',
         diet: $('#r-diet').value.trim(),
         note: $('#r-note').value.trim(),
         sent: new Date().toISOString()
@@ -1633,6 +1684,7 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
           'Name: ' + data.name,
           'Attending: ' + data.attending,
           'Guests in total: ' + (data.guests || '—'),
+          'Who is coming: ' + (data.party || data.name),
           'Dietary restrictions: ' + (data.diet || 'None'),
           '', data.note
         ].join('\n');

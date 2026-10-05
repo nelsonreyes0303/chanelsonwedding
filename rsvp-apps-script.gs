@@ -13,11 +13,15 @@
 
 var RSVP_SHEET = 'Website RSVP';
 
+var GUEST_NAMES = 'Who is coming';
+var GUEST_NAMES_AT = 5;   // 1-based column, straight after Guests
+
 var COLUMNS = [
   'Received (Manila)',
   'Name',
   'Attending',
   'Guests',
+  GUEST_NAMES,
   'Dietary restrictions',
   'Note',
   'Sent from browser (ISO)'
@@ -32,6 +36,7 @@ function doPost(e) {
       clean_(p.name),
       clean_(p.attending),
       clean_(p.guests),
+      clean_(p.party),
       clean_(p.diet),
       clean_(p.note),
       clean_(p.sent)
@@ -55,8 +60,19 @@ function getSheet_() {
     sheet.appendRow(COLUMNS);
     sheet.getRange(1, 1, 1, COLUMNS.length).setFontWeight('bold');
     sheet.setFrozenRows(1);
+    return sheet;
   }
+  addGuestNamesColumn_(sheet);
   return sheet;
+}
+
+// Sheets written before the guest list existed are one column short. Open a
+// gap in the right place so replies already collected keep their alignment.
+function addGuestNamesColumn_(sheet) {
+  var header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  if (header.indexOf(GUEST_NAMES) !== -1) return;
+  sheet.insertColumnAfter(GUEST_NAMES_AT - 1);
+  sheet.getRange(1, GUEST_NAMES_AT).setValue(GUEST_NAMES).setFontWeight('bold');
 }
 
 function clean_(v) {
