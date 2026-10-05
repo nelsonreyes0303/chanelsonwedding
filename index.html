@@ -163,6 +163,49 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
   .gate-tap{margin-top:18px;}
 }
 
+/* gate ornament: a drawn botanical in two corners, a hairline frame, drifting motes */
+.gate-main{position:relative;z-index:1;}
+.gate-deco{position:absolute;inset:0;z-index:0;pointer-events:none;overflow:hidden;}
+.gate-glow{position:absolute;left:50%;top:40%;width:min(880px,130vw);aspect-ratio:1;
+  transform:translate(-50%,-50%);border-radius:50%;
+  background:radial-gradient(circle,rgba(176,141,87,.11),transparent 62%);
+  animation:glowPulse 11s ease-in-out infinite;}
+.gate-frame{position:absolute;inset:clamp(12px,2.2vw,30px);
+  border:1px solid rgba(176,141,87,.22);opacity:0;
+  animation:gateIn 1.8s var(--ease) .45s forwards;}
+.gate-frame::before{content:'';position:absolute;inset:5px;
+  border:1px solid rgba(176,141,87,.1);}
+.gate-sprig{position:absolute;width:clamp(112px,17vw,246px);height:auto;color:var(--gold);
+  opacity:0;animation:sprigIn 1.4s var(--ease) .75s forwards;}
+.gate-sprig [data-len]{stroke-dasharray:var(--len);stroke-dashoffset:var(--len);
+  animation:drawIn 2.4s var(--ease) .95s forwards;}
+.sp-tl{top:clamp(18px,3vw,38px);left:clamp(18px,3vw,38px);}
+.sp-br{bottom:clamp(18px,3vw,38px);right:clamp(18px,3vw,38px);transform:rotate(180deg);}
+@keyframes sprigIn{to{opacity:.46;}}
+@keyframes glowPulse{0%,100%{opacity:.55;}50%{opacity:1;}}
+.mote{position:absolute;bottom:-10px;left:var(--x,50%);width:3px;height:3px;border-radius:50%;
+  background:rgba(205,174,124,.55);opacity:0;
+  animation:drift var(--t,17s) linear var(--d,0s) infinite;}
+@keyframes drift{
+  0%{opacity:0;transform:translateY(0) translateX(0);}
+  14%{opacity:.7;}
+  86%{opacity:.35;}
+  100%{opacity:0;transform:translateY(-88vh) translateX(22px);}
+}
+.env{animation:envFloat 6.5s ease-in-out 1.7s infinite;}
+.env.opening{animation:none;}
+.env:hover .env-body{box-shadow:0 34px 72px rgba(0,0,0,.52),inset 0 1px 0 rgba(255,255,255,.5);}
+@keyframes envFloat{0%,100%{transform:translateY(0);}50%{transform:translateY(-9px);}}
+.env-seal{overflow:hidden;}
+.env-seal::after{content:'';position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(118deg,transparent 40%,rgba(255,255,255,.34) 50%,transparent 60%);
+  opacity:0;animation:sealShine 7s ease-in-out 2.4s infinite;}
+@keyframes sealShine{
+  0%,62%,100%{opacity:0;transform:translateX(-70%);}
+  72%{opacity:1;}
+  84%{opacity:0;transform:translateX(70%);}
+}
+
 /* ========================= TOP BAR ========================= */
 #topbar{position:fixed;top:0;left:0;right:0;z-index:90;height:calc(var(--bar) + var(--pad-t));
   padding-top:var(--pad-t);background:rgba(247,241,231,.94);backdrop-filter:blur(14px);
@@ -580,6 +623,9 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
   .rule{width:64px;}
   .sw i{transform:none;opacity:1;}
   .ico [data-len]{stroke-dashoffset:0!important;}
+  .gate-sprig [data-len]{stroke-dashoffset:0!important;}
+  .gate-sprig{opacity:.46!important;} .gate-frame{opacity:1!important;}
+  .mote{display:none!important;}
   .sched::before{transform:none;}
 }
 @media print{
@@ -594,7 +640,31 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
 
 <!-- ==================== ENVELOPE GATE ==================== -->
 <div id="gate">
-  <div>
+  <div class="gate-deco" aria-hidden="true">
+    <span class="gate-glow"></span>
+    <span class="gate-frame"></span>
+    <svg class="gate-sprig sp-tl" viewBox="0 0 124 124" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M4 4C40 22 72 52 96 92"/><path d="M4 4C38 14 74 20 112 22"/><path d="M4 4C14 38 20 74 22 112"/>
+      <path d="M34 20c13-6 26 0 31 14-13 6-26 0-31-14Z"/><path d="M58 44c13-6 26 0 31 14-13 6-26 0-31-14Z"/>
+      <path d="M44 14c5-13 18-18 31-13-5 13-18 18-31 13Z"/><path d="M76 20c5-13 18-18 31-13-5 13-18 18-31 13Z"/>
+      <path d="M14 44c13 5 18 18 13 31-13-5-18-18-13-31Z"/><path d="M20 76c13 5 18 18 13 31-13-5-18-18-13-31Z"/>
+      <circle cx="100" cy="97" r="3"/><circle cx="117" cy="24" r="2.4"/><circle cx="24" cy="117" r="2.4"/>
+    </svg>
+    <svg class="gate-sprig sp-br" viewBox="0 0 124 124" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M4 4C40 22 72 52 96 92"/><path d="M4 4C38 14 74 20 112 22"/><path d="M4 4C14 38 20 74 22 112"/>
+      <path d="M34 20c13-6 26 0 31 14-13 6-26 0-31-14Z"/><path d="M58 44c13-6 26 0 31 14-13 6-26 0-31-14Z"/>
+      <path d="M44 14c5-13 18-18 31-13-5 13-18 18-31 13Z"/><path d="M76 20c5-13 18-18 31-13-5 13-18 18-31 13Z"/>
+      <path d="M14 44c13 5 18 18 13 31-13-5-18-18-13-31Z"/><path d="M20 76c13 5 18 18 13 31-13-5-18-18-13-31Z"/>
+      <circle cx="100" cy="97" r="3"/><circle cx="117" cy="24" r="2.4"/><circle cx="24" cy="117" r="2.4"/>
+    </svg>
+    <span class="mote" style="--x:12%;--d:0s;--t:18s"></span>
+    <span class="mote" style="--x:27%;--d:3.5s;--t:15s"></span>
+    <span class="mote" style="--x:44%;--d:7s;--t:20s"></span>
+    <span class="mote" style="--x:63%;--d:1.8s;--t:16s"></span>
+    <span class="mote" style="--x:79%;--d:9.5s;--t:19s"></span>
+    <span class="mote" style="--x:91%;--d:5.2s;--t:17s"></span>
+  </div>
+  <div class="gate-main">
     <p class="gate-eyebrow gate-fade gf1">You&rsquo;ve got a love letter from</p>
     <p class="gate-names gate-fade gf2">Nelson<span>and</span>Chanel</p>
     <div class="gate-fade gf3">
@@ -1294,7 +1364,7 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
   })();
 
   /* ------------------------------------------------ LINE ART: PATH LENGTHS */
-  $$('.ico').forEach(function (svg) {
+  $$('.ico,.gate-sprig').forEach(function (svg) {
     $$('path,circle,rect,line,polyline,ellipse', svg).forEach(function (p) {
       var len;
       try { len = p.getTotalLength(); } catch (e) { len = 0; }
