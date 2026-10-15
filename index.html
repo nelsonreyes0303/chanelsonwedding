@@ -531,6 +531,19 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
   background:var(--gold);animation:popIn .3s var(--ease-back);}
 #fld-guests{transition:opacity .35s ease;}
 #fld-names[hidden]{display:none;}
+.lookup{display:flex;gap:10px;}
+.lookup input{flex:1 1 auto;min-width:0;}
+.find{flex:0 0 auto;padding:0 20px;min-height:48px;cursor:pointer;
+  font-family:var(--sans);font-size:9.5px;letter-spacing:.24em;text-transform:uppercase;
+  color:var(--gold-light);background:rgba(176,141,87,.12);
+  border:1px solid rgba(176,141,87,.5);transition:background .3s,color .3s,border-color .3s;}
+.find:hover{background:rgba(176,141,87,.24);color:var(--cream);}
+.find:disabled{opacity:.45;cursor:default;}
+.found{margin:12px 0 0;padding:12px 14px;font-family:var(--serif);font-size:1.02rem;
+  line-height:1.45;color:var(--cream);border:1px solid rgba(176,141,87,.42);
+  background:rgba(176,141,87,.1);animation:popIn .4s var(--ease-back);}
+.found b{color:var(--gold-light);font-weight:400;}
+#rsvp-rest[hidden]{display:none;}
 .gname-row{display:flex;align-items:center;gap:12px;margin-bottom:9px;}
 .gname-row:last-child{margin-bottom:0;}
 .gname-no{flex:0 0 auto;width:22px;font-family:var(--sans);font-size:10px;
@@ -1219,8 +1232,14 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
     <form class="rform" id="rsvp-form" novalidate>
       <div class="fld">
         <label for="r-name">Your name</label>
-        <input type="text" id="r-name" name="name" autocomplete="name" required placeholder="As written on your invitation">
+        <div class="lookup">
+          <input type="text" id="r-name" name="name" autocomplete="name" required placeholder="As written on your invitation">
+          <button class="find tap" type="button" id="r-find">Find</button>
+        </div>
+        <span class="hint">We will look you up on our guest list.</span>
+        <p class="found" id="r-found" hidden></p>
       </div>
+      <div id="rsvp-rest" hidden>
       <div class="fld">
         <fieldset>
           <legend>Are you coming?</legend>
@@ -1233,7 +1252,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
       <div class="fld" id="fld-guests">
         <label for="r-guests">How many of you are coming, in total?</label>
         <input type="number" id="r-guests" name="guests" min="1" max="12" step="1" inputmode="numeric" placeholder="Including yourself">
-        <span class="hint">Your invitation shows the seats we have set aside for you.</span>
+        <span class="hint" id="guests-hint">Your invitation shows the seats we have set aside for you.</span>
       </div>
       <div class="fld" id="fld-names" hidden>
         <label id="names-label">Who is coming with you?</label>
@@ -1252,6 +1271,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
         Send our reply
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="width:14px;height:14px"><path d="M4 12h15"/><path d="M13 6l6 6-6 6"/></svg>
       </button>
+      </div>
       <p id="rsvp-msg" role="status" aria-live="polite"></p>
       <p class="rsvp-by">Responses go straight to <strong>Nelson &amp; Chanel</strong></p>
     </form>
@@ -1651,6 +1671,8 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
   (function rsvp() {
     var form = $("#rsvp-form"), msg = $("#rsvp-msg"), guests = $("#fld-guests");
     var namesFld = $("#fld-names"), namesBox = $("#guest-names");
+    var findBtn = $("#r-find"), foundLine = $("#r-found"), rest = $("#rsvp-rest");
+    var invite = null;   // the matched guest-list row, or null until one is found
     if (!form) return;
 
     /* One row per companion. The sender is guest 1, so a party of n needs
@@ -1658,8 +1680,10 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
     function drawNames() {
       var coming = ($("input[name=attending]:checked", form) || {}).value === "yes";
       var total  = parseInt($("#r-guests").value, 10);
-      var rows   = (coming && total > 1) ? Math.min(total, 12) - 1 : 0;
+      var cap    = invite ? invite.seats : 12;
+      var rows   = (coming && total > 1) ? Math.min(total, cap) - 1 : 0;
       var kept   = $$(".gname", namesBox).map(function (i) { return i.value; });
+      var seed   = (invite && invite.party) || [];
 
       namesFld.hidden = rows === 0;
       if (rows === 0) { namesBox.innerHTML = ""; return; }
@@ -1673,6 +1697,7 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
       namesBox.innerHTML = html;
       $$(".gname", namesBox).forEach(function (input, i) {
         if (kept[i]) input.value = kept[i];
+        else if (seed[i]) input.value = seed[i];
       });
     }
 
@@ -1682,6 +1707,67 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
       msg.textContent = text;
       msg.style.color = bad ? '#E8A6A6' : 'var(--gold-light)';
     }
+
+    /* The guest list is the gate: nothing below the name field opens until a
+       row matches, so a reply can only be filed against a real invitation. */
+    function forget() {
+      invite = null;
+      rest.hidden = true;
+      foundLine.hidden = true;
+    }
+
+    function lookup() {
+      var q = $("#r-name").value.trim();
+      if (q.length < 3) { say("Please type your full name as written on your invitation.", true); return; }
+      if (!RSVP_ENDPOINT) { say("Our guest list is not reachable just yet.", true); return; }
+
+      say("Looking for your invitation\u2026");
+      findBtn.disabled = true;
+      fetch(RSVP_ENDPOINT + "?q=" + encodeURIComponent(q))
+        .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+        .then(function (res) {
+          findBtn.disabled = false;
+          if (!res || res.ok !== true) throw new Error("rejected");
+          if (!res.found) {
+            forget();
+            say("We could not find that name on our list. Please check your invitation, or message Nelson & Chanel.", true);
+            return;
+          }
+          invite = res;
+          say("");
+          $("#r-name").value = res.name;
+
+          var seats = res.seats;
+          foundLine.hidden = false;
+          foundLine.textContent = "Found you, " + res.name + ". We have set aside " +
+            seats + (seats === 1 ? " seat" : " seats") + " for you.";
+
+          var g = $("#r-guests");
+          g.max = seats;
+          g.value = seats;
+          $("#guests-hint").textContent = seats === 1
+            ? "Your invitation is for one."
+            : "Up to " + seats + " in total, including yourself.";
+
+          rest.hidden = false;
+          drawNames();
+          if (res.replied) say("We already have a reply for this invitation \u2014 sending again will update it.");
+        })
+        .catch(function () {
+          findBtn.disabled = false;
+          say("We could not reach our guest list. Please try again in a moment.", true);
+        });
+    }
+
+    findBtn.addEventListener("click", lookup);
+    $("#r-name").addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { e.preventDefault(); lookup(); }
+    });
+    /* Editing the name after a match closes the form again, so the reply can
+       never be filed under a name nobody looked up. */
+    $("#r-name").addEventListener("input", function () {
+      if (invite && $("#r-name").value.trim() !== invite.name) { forget(); say(""); }
+    });
 
     $$('input[name=attending]', form).forEach(function (r) {
       r.addEventListener('change', function () {
@@ -1707,7 +1793,15 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
       var att  = $('input[name=attending]:checked', form);
 
       if (!name) { say('Please tell us your name.', true); $('#r-name').focus(); return; }
+      if (!invite) { say('Please find your invitation first.', true); $('#r-find').focus(); return; }
       if (!att)  { say('Please let us know if you can join us.', true); return; }
+
+      var total = parseInt($('#r-guests').value, 10);
+      if (att.value === 'yes' && (!total || total < 1 || total > invite.seats)) {
+        say('Please enter a number from 1 to ' + invite.seats + '.', true);
+        $('#r-guests').focus();
+        return;
+      }
 
       var party = $$('.gname', namesBox).map(function (i) { return i.value.trim(); });
       if (!namesFld.hidden && party.some(function (n) { return !n; })) {
