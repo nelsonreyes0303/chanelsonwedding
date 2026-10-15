@@ -400,6 +400,22 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
 @keyframes swGrow{to{transform:none;opacity:1;}}
 .sw b{display:block;font-family:var(--sans);font-size:8px;font-weight:400;letter-spacing:.18em;
   text-transform:uppercase;color:var(--muted);margin-top:10px;}
+.ref-label{font-family:var(--sans);font-size:9px;letter-spacing:.3em;text-transform:uppercase;
+  color:var(--muted);margin:38px 0 16px;text-align:center;}
+/* The strip is 3:2 and the portrait 3:4, so 2:1 of the width stands them
+   the same height without cropping either. */
+.ref{display:flex;gap:clamp(10px,2.2vw,18px);justify-content:center;align-items:flex-start;
+  max-width:720px;margin:0 auto;}
+.ref figure{margin:0;min-width:0;}
+.ref figure:first-child{flex:2 1 0;}
+.ref figure:last-child{flex:1 1 0;}
+.ref img{display:block;width:100%;height:auto;border:1px solid rgba(176,141,87,.32);}
+.ref figcaption{font-family:var(--sans);font-size:8px;letter-spacing:.26em;text-transform:uppercase;
+  color:var(--muted);text-align:center;margin-top:10px;}
+@media (max-width:560px){
+  .ref{flex-direction:column;align-items:center;}
+  .ref figure{flex:0 0 auto;width:100%;max-width:330px;}
+}
 .at-no{text-align:center;margin:34px auto 0;font-style:italic;color:var(--burgundy);
   font-size:.98rem;}
 
@@ -1009,6 +1025,20 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
       <div class="sw" style="--i:3"><i style="background:#B8A491"></i><b>Taupe</b></div>
       <div class="sw" style="--i:4"><i style="background:#C9BAB2"></i><b>Stone</b></div>
     </div>
+    <p class="ref-label">For reference</p>
+    <div class="ref">
+      <figure>
+        <img src="img/attire-ladies.jpg" width="1200" height="800" loading="lazy"
+             alt="Five long evening dresses in slate, pewter, clay, taupe and stone">
+        <figcaption>Ladies</figcaption>
+      </figure>
+      <figure>
+        <img src="img/attire-gentlemen.jpg" width="560" height="747" loading="lazy"
+             alt="A black suit worn with a white shirt and black tie">
+        <figcaption>Gentlemen</figcaption>
+      </figure>
+    </div>
+
     <p class="at-no">We kindly request guests to avoid wearing white or ivory.</p>
   </div>
 </section>
