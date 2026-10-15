@@ -1267,10 +1267,6 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
         <span class="hint">You are already counted &mdash; please name the rest of your party.</span>
       </div>
       <div class="fld">
-        <label for="r-diet">Any dietary restrictions or allergies?</label>
-        <input type="text" id="r-diet" name="diet" placeholder="Leave blank if none">
-      </div>
-      <div class="fld">
         <label for="r-note">A note for us (optional)</label>
         <textarea id="r-note" name="note" rows="3" placeholder="A few words, if you like"></textarea>
       </div>
@@ -1928,7 +1924,6 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
         attending: att.value === 'yes' ? 'Yes' : 'No',
         guests: $('#r-guests').value || '',
         party: party.length ? [name].concat(party).join(', ') : '',
-        diet: $('#r-diet').value.trim(),
         note: $('#r-note').value.trim(),
         sent: new Date().toISOString()
       };
@@ -1962,7 +1957,6 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
           'Attending: ' + data.attending,
           'Guests in total: ' + (data.guests || '—'),
           'Who is coming: ' + (data.party || data.name),
-          'Dietary restrictions: ' + (data.diet || 'None'),
           '', data.note
         ].join('\n');
         window.location.href = 'mailto:' + RSVP_EMAIL +
