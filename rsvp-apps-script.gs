@@ -180,7 +180,7 @@ function markRoster_(names, attending) {
 
     var answered = -1;
     for (var i = 0; i < rows.length; i++) {
-      if (norm_(rows[i][0]) !== want) continue;
+      if (rosterName_(rows[i][0]) !== want) continue;
       var status = tidy_(rows[i][col]);
       if (status === '' || status.toLowerCase() === 'pending') {
         sheet.getRange(i + 1, ROSTER_STATUS_COL).setValue(answer);
@@ -299,6 +299,14 @@ function hasEveryWord_(haystack, words) {
   return true;
 }
 
+/**
+ * A roster row numbers itself in its name cell — "1. Raven" — so the number is
+ * part of the layout, not the person, and comes off before any comparison.
+ */
+function rosterName_(v) {
+  return norm_(String(v == null ? '' : v).replace(/^\s*\d+\s*[.)]\s*/, ''));
+}
+
 /** Lowercase, drop accents and punctuation, collapse spaces, so that
  *  "Peña-Dela Cruz, Ma." and "pena dela cruz ma" are the same person. */
 function norm_(s) {
@@ -349,6 +357,75 @@ function json_(obj) {
   return ContentService
     .createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+/* -------------------------------------------------------------------- sync */
+
+/**
+ * Rebuilds the roster from the seating chart, so a guest added to the chart
+ * appears here too. Run it from the editor; nothing calls it on its own.
+ *
+ * Answers already given are carried across by name, and a name appearing more
+ * than once keeps its answers in order, so three rows of one placeholder stay
+ * three distinct rows rather than collapsing into one. The old tab is copied
+ * aside first, because this rewrites the sheet rather than editing it.
+ */
+function syncRoster() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var guests = readGuests_();
+  if (!guests.length) {
+    Logger.log('Read nothing from "' + GUEST_SHEET + '". Nothing was changed.');
+    return;
+  }
+
+  var sheet = ss.getSheetByName(ROSTER_SHEET);
+  var answers = {};
+  if (sheet && sheet.getLastRow() > 0) {
+    sheet.getRange(1, 1, sheet.getLastRow(), ROSTER_STATUS_COL).getValues()
+      .forEach(function (r) {
+        var k = rosterName_(r[0]);
+        var v = tidy_(r[ROSTER_STATUS_COL - 1]);
+        if (!k || !v) return;
+        (answers[k] = answers[k] || []).push(v);
+      });
+    sheet.copyTo(ss).setName(
+      ROSTER_SHEET + ' before ' +
+      Utilities.formatDate(new Date(), 'Asia/Manila', 'MM-dd HH:mm'));
+  } else if (!sheet) {
+    sheet = ss.insertSheet(ROSTER_SHEET);
+  }
+
+  var order = [], byTable = {};
+  guests.forEach(function (g) {
+    if (!byTable[g.table]) { byTable[g.table] = []; order.push(g.table); }
+    byTable[g.table].push(g.name);
+  });
+
+  var rows = [], heads = [], pending = [], carried = 0;
+  order.forEach(function (table) {
+    heads.push(rows.length + 1);
+    rows.push([table, '']);
+    rows.push(['', '']);
+    byTable[table].forEach(function (name, i) {
+      var k = rosterName_(name);
+      var had = (answers[k] && answers[k].length) ? answers[k].shift() : 'Pending';
+      if (had.toLowerCase() !== 'pending') carried++;
+      if (had.toLowerCase() === 'pending') pending.push(rows.length + 1);
+      rows.push([(i + 1) + '. ' + name, had]);
+    });
+    rows.push(['', '']);
+  });
+
+  sheet.clear();
+  sheet.getRange(1, 1, rows.length, 2).setValues(rows);
+  heads.forEach(function (r) { sheet.getRange(r, 1).setFontWeight('bold'); });
+  pending.forEach(function (r) { sheet.getRange(r, ROSTER_STATUS_COL).setBackground('#FCE5CD'); });
+  sheet.setColumnWidth(1, 260);
+  sheet.setFrozenRows(0);
+
+  Logger.log('Rebuilt ' + ROSTER_SHEET + ': ' + guests.length + ' guests across ' +
+    order.length + ' tables. Answers carried over: ' + carried +
+    '. The previous tab was copied aside.');
 }
 
 /* -------------------------------------------------------------------- test */
