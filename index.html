@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Nelson &amp; Chanel — December 6, 2026</title>
 <meta name="description" content="Nelson and Chanel are getting married on December 6, 2026 in Quezon City and Pasig.">
-<meta name="theme-color" content="#16281F">
+<meta name="theme-color" content="#252816">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="apple-touch-icon" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -15,7 +15,7 @@
 /* ========================= TOKENS ========================= */
 :root{
   --burgundy:#6B1F2E; --burgundy-deep:#4A1420; --burgundy-soft:#8C3448;
-  --green:#223A2C; --green-deep:#16281F; --green-mid:#2E4A3A; --green-ink:#101E17;
+  --green:#353A22; --green-deep:#252816; --green-mid:#444A2E; --green-ink:#1B1E10;
   --gold:#B08D57; --gold-light:#CDAE7C;
   --cream:#F7F1E7; --cream-warm:#EFE4D4; --paper:#FCF9F4;
   --ink:#241E1B; --muted:#6E635C; --muted-light:#A79A8E;
@@ -101,7 +101,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
 
 /* ========================= ENVELOPE GATE ========================= */
 #gate{position:fixed;inset:0;z-index:200;
-  background:radial-gradient(ellipse at 50% 38%,#2C4A38 0%,#1B3126 52%,var(--green-ink) 100%);
+  background:radial-gradient(ellipse at 50% 38%,#43492C 0%,#2D311B 52%,var(--green-ink) 100%);
   display:flex;align-items:center;justify-content:center;text-align:center;
   color:var(--cream);padding:24px;overflow-y:auto;
   transition:opacity 1s ease,visibility 1s;}
@@ -148,7 +148,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
   clip-path:polygon(0 0,100% 0,50% 100%);
   transition:transform 1s var(--ease);
   filter:drop-shadow(0 5px 7px rgba(0,0,0,.16));}
-.env-seal{position:absolute;left:50%;top:58%;width:56px;height:56px;z-index:6;
+.env-seal{position:absolute;left:50%;top:58%;width:72px;height:72px;z-index:6;
   transform:translate(-50%,-50%);border-radius:50%;
   background:radial-gradient(circle at 34% 30%,var(--burgundy-soft),var(--burgundy) 52%,var(--burgundy-deep));
   box-shadow:0 4px 12px rgba(0,0,0,.4),inset 0 1px 2px rgba(255,255,255,.28);
@@ -197,6 +197,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
 .env:hover .env-body{box-shadow:0 34px 72px rgba(0,0,0,.52),inset 0 1px 0 rgba(255,255,255,.5);}
 @keyframes envFloat{0%,100%{transform:translateY(0);}50%{transform:translateY(-9px);}}
 .env-seal{overflow:hidden;}
+.env-seal img{width:86%;height:auto;display:block;}
 .env-seal::after{content:'';position:absolute;inset:0;pointer-events:none;
   background:linear-gradient(118deg,transparent 40%,rgba(255,255,255,.34) 50%,transparent 60%);
   opacity:0;animation:sealShine 7s ease-in-out 2.4s infinite;}
@@ -700,7 +701,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
         </span>
         <span class="env-body"></span>
         <span class="env-flap"></span>
-        <span class="env-seal">NC</span>
+        <span class="env-seal"><img src="img/monogram-gold.png" alt="" width="240" height="240"></span>
       </button>
     </div>
     <p class="gate-tap gate-fade gf4">Tap to open your invitation</p>
@@ -1445,7 +1446,7 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
     topbar.classList.toggle('show', !home);
     topbar.classList.toggle('on-dark', dark);
     barTitle.textContent = view.getAttribute('data-title') || '';
-    if (themeMeta) themeMeta.setAttribute('content', dark || home ? '#16281F' : '#F7F1E7');
+    if (themeMeta) themeMeta.setAttribute('content', dark || home ? '#252816' : '#F7F1E7');
     progress.style.width = '0%';
   }
 
