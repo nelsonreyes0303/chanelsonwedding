@@ -67,12 +67,35 @@ function doPost(e) {
  * confirms a name someone already knows rather than handing out the guest list.
  */
 function doGet(e) {
-  var q = (e && e.parameter && e.parameter.q) || '';
-  if (!q) return json_({ ok: true, message: 'RSVP endpoint is live.' });
+  var p = (e && e.parameter) || {};
+  if (p.names) return checkNames_(p.names);
+  var q = p.q || "";
+  if (!q) return json_({ ok: true, message: "RSVP endpoint is live." });
   try {
     var hit = findGuest_(q);
     if (!hit) return json_({ ok: true, found: false });
     return json_({ ok: true, found: true, name: hit.name, table: hit.table });
+  } catch (err) {
+    return json_({ ok: false, error: String(err) });
+  }
+}
+
+/**
+ * The companions on one reply, checked in a single request. The chart is read
+ * once for the whole party rather than once per name.
+ */
+function checkNames_(raw) {
+  try {
+    var list = String(raw).split("|").map(tidy_).filter(String).slice(0, 12);
+    if (!list.length) return json_({ ok: true, results: [] });
+    var guests = readGuests_();
+    var results = list.map(function (n) {
+      var hit = matchIn_(guests, n);
+      return hit
+        ? { q: n, found: true, name: hit.name, table: hit.table }
+        : { q: n, found: false };
+    });
+    return json_({ ok: true, results: results });
   } catch (err) {
     return json_({ ok: false, error: String(err) });
   }
@@ -121,10 +144,13 @@ function readGuests_() {
  * like a bare surname shared by three people will never resolve.
  */
 function findGuest_(q) {
+  return matchIn_(readGuests_(), q);
+}
+
+function matchIn_(guests, q) {
   var want = norm_(q);
   if (want.length < MIN_QUERY) return null;
 
-  var guests = readGuests_();
   var words = want.split(' ');
   var exact = [], prefix = [], loose = [];
 

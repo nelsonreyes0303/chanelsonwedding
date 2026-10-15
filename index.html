@@ -549,6 +549,11 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
 .gname-no{flex:0 0 auto;width:22px;font-family:var(--sans);font-size:10px;
   letter-spacing:.1em;color:rgba(205,174,124,.75);text-align:right;}
 .gname-row input{flex:1 1 auto;min-height:44px;padding:10px 14px;font-size:1.02rem;}
+.gname-row input.bad{border-color:#C98B8B;background:rgba(201,139,139,.08);}
+.gname-state{flex:0 0 auto;width:16px;text-align:center;font-family:var(--sans);font-size:13px;
+  line-height:1;color:transparent;transition:color .3s;}
+.gname-state.ok{color:var(--gold-light);}
+.gname-state.no{color:#E8A6A6;}
 .fld .hint{display:block;margin-top:7px;font-family:var(--serif);font-style:italic;
   font-size:.92rem;color:rgba(247,241,231,.5);}
 @media (max-width:600px){
@@ -1244,7 +1249,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
         <fieldset>
           <legend>Are you coming?</legend>
           <div class="opts">
-            <label class="opt tap"><input type="radio" name="attending" value="yes"> Joyfully, we would not miss it</label>
+            <label class="opt tap"><input type="radio" name="attending" value="yes" checked> Joyfully, we would not miss it</label>
             <label class="opt tap"><input type="radio" name="attending" value="no"> Regretfully, we cannot make it</label>
           </div>
         </fieldset>
@@ -1691,7 +1696,8 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
       for (var i = 0; i < rows; i++) {
         html += '<div class="gname-row"><span class="gname-no">' + (i + 2) +
           '</span><input type="text" class="gname" autocomplete="off" ' +
-          'aria-label="Name of guest ' + (i + 2) + '" placeholder="Full name"></div>';
+          'aria-label="Name of guest ' + (i + 2) + '" placeholder="Full name">' +
+          '<span class="gname-state" aria-hidden="true"></span></div>';
       }
       namesBox.innerHTML = html;
       $$(".gname", namesBox).forEach(function (input, i) {
@@ -1701,6 +1707,68 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
     }
 
     $("#r-guests").addEventListener("input", drawNames);
+
+    /* Companions are checked against the same chart as the sender, so a reply
+       cannot quietly add someone who was never invited. Verdicts are kept by
+       name, so retyping a name already checked costs nothing. */
+    var known = {};
+
+    function key(s) {
+      return s.toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+    }
+
+    function paintNames() {
+      $$(".gname", namesBox).forEach(function (input) {
+        var mark = input.nextElementSibling;
+        var k = key(input.value.trim());
+        var verdict = k ? known[k] : undefined;
+        input.classList.toggle("bad", verdict === false);
+        if (!mark) return;
+        mark.className = "gname-state" + (verdict === true ? " ok" : verdict === false ? " no" : "");
+        mark.textContent = verdict === true ? "\u2713" : verdict === false ? "\u2715" : "";
+      });
+    }
+
+    function pass(list) {
+      list.forEach(function (n) { known[key(n)] = true; });
+    }
+
+    function checkNames(done) {
+      var asking = [];
+      $$(".gname", namesBox).forEach(function (input) {
+        var v = input.value.trim();
+        if (v && !(key(v) in known)) asking.push(v);
+      });
+      if (!asking.length || !RSVP_ENDPOINT) { paintNames(); if (done) done(); return; }
+
+      fetch(RSVP_ENDPOINT + "?names=" + encodeURIComponent(asking.join("|")))
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+          if (res && res.ok && res.results) {
+            res.results.forEach(function (x) { known[key(x.q)] = !!x.found; });
+          } else {
+            pass(asking);
+          }
+          paintNames();
+          if (done) done();
+        })
+        .catch(function () {
+          /* A failed check must not trap the reply: the sender is already
+             verified against the chart, so let their companions through
+             rather than ask again on a request that will not answer. */
+          pass(asking);
+          paintNames();
+          if (done) done();
+        });
+    }
+
+    namesBox.addEventListener("focusout", function (e) {
+      if (e.target.classList && e.target.classList.contains("gname")) checkNames();
+    });
+    namesBox.addEventListener("input", function (e) {
+      if (e.target.classList && e.target.classList.contains("gname")) paintNames();
+    });
+
 
     function say(text, bad) {
       msg.textContent = text;
@@ -1798,6 +1866,18 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
       if (!namesFld.hidden && party.some(function (n) { return !n; })) {
         say('Please name everyone coming with you.', true);
         ($$('.gname', namesBox).filter(function (i) { return !i.value.trim(); })[0] || {}).focus();
+        return;
+      }
+
+      var unchecked = party.filter(function (n) { return n && !(key(n) in known); });
+      if (unchecked.length) {
+        say('Checking the names2026');
+        checkNames(function () { form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
+        return;
+      }
+      var strangers = party.filter(function (n) { return known[key(n)] === false; });
+      if (strangers.length) {
+        say('We could not find ' + strangers[0] + ' on our list. Please check the spelling, or message Nelson & Chanel.', true);
         return;
       }
 
