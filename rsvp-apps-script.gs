@@ -158,20 +158,40 @@ function matchIn_(guests, q) {
     var got = norm_(guests[i].name);
     if (!got) continue;
     if (got === want) { exact.push(guests[i]); continue; }
-    if (got.indexOf(want) === 0 || want.indexOf(got) === 0) { prefix.push(guests[i]); continue; }
+    if (startsWith_(got, want) || longerForm_(want, got)) { prefix.push(guests[i]); continue; }
     if (hasEveryWord_(got, words)) loose.push(guests[i]);
   }
 
   return pickOne_(exact) || pickOne_(prefix) || pickOne_(loose);
 }
 
+/** What was typed opens the name on the chart: "nelson rey" finds "Nelson Reyes". */
+function startsWith_(got, want) {
+  return got.indexOf(want) === 0;
+}
+
+/**
+ * The chart entry opens what was typed, so "Mai Villa" still answers to "Mai
+ * Villa Jr". Only whole words count, and only entries of two words or more:
+ * a lone nickname like "Mai" must not swallow every name beginning with it.
+ */
+function longerForm_(want, got) {
+  if (got.split(" ").length < 2) return false;
+  return want.indexOf(got + " ") === 0;
+}
+
 /** One winner, or nothing. Two rows naming the same person at the same table
  *  count as one, which is what a name repeated across a merged cell looks like. */
 function pickOne_(list) {
   if (!list.length) return null;
-  for (var i = 1; i < list.length; i++) {
+  var seats = {};
+  for (var i = 0; i < list.length; i++) {
     if (norm_(list[i].name) !== norm_(list[0].name)) return null;
+    seats[list[i].table] = true;
   }
+  // The same name twice is one person written twice; the same name at two
+  // tables is two people, and guessing a seat for them would seat one wrongly.
+  if (Object.keys(seats).length > 1) return { name: list[0].name, table: "" };
   return list[0];
 }
 

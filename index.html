@@ -1711,7 +1711,8 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
     /* Companions are checked against the same chart as the sender, so a reply
        cannot quietly add someone who was never invited. Verdicts are kept by
        name, so retyping a name already checked costs nothing. */
-    var known = {};
+    var known = {};   // name -> true on the chart, false not on it
+    var tried = {};   // asked about, no answer: never ticked, never blocked
 
     function key(s) {
       return s.toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
@@ -1729,15 +1730,19 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
       });
     }
 
-    function pass(list) {
-      list.forEach(function (n) { known[key(n)] = true; });
+    /* Asked, but no answer came back. Recorded apart from a verdict: the name
+       is never ticked, because no check confirmed it, and never refused,
+       because the failure is ours and not the guest's. */
+    function markTried(list) {
+      list.forEach(function (n) { tried[key(n)] = true; });
     }
 
     function checkNames(done) {
       var asking = [];
       $$(".gname", namesBox).forEach(function (input) {
         var v = input.value.trim();
-        if (v && !(key(v) in known)) asking.push(v);
+        var k = key(v);
+        if (v && !(k in known) && !(k in tried)) asking.push(v);
       });
       if (!asking.length || !RSVP_ENDPOINT) { paintNames(); if (done) done(); return; }
 
@@ -1747,7 +1752,7 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
           if (res && res.ok && res.results) {
             res.results.forEach(function (x) { known[key(x.q)] = !!x.found; });
           } else {
-            pass(asking);
+            markTried(asking);
           }
           paintNames();
           if (done) done();
@@ -1756,7 +1761,7 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
           /* A failed check must not trap the reply: the sender is already
              verified against the chart, so let their companions through
              rather than ask again on a request that will not answer. */
-          pass(asking);
+          markTried(asking);
           paintNames();
           if (done) done();
         });
@@ -1869,7 +1874,9 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
         return;
       }
 
-      var unchecked = party.filter(function (n) { return n && !(key(n) in known); });
+      var unchecked = party.filter(function (n) {
+        return n && !(key(n) in known) && !(key(n) in tried);
+      });
       if (unchecked.length) {
         say('Checking the names2026');
         checkNames(function () { form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); });
