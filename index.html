@@ -554,6 +554,11 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
   line-height:1;color:transparent;transition:color .3s;}
 .gname-state.ok{color:var(--gold-light);}
 .gname-state.no{color:#E8A6A6;}
+.gname-state.wait{position:relative;}
+.gname-state.wait::after{content:'';position:absolute;inset:2px;border-radius:50%;
+  border:1.5px solid rgba(205,174,124,.28);border-top-color:var(--gold-light);
+  animation:ringSpin .72s linear infinite;}
+@keyframes ringSpin{to{transform:rotate(360deg);}}
 .fld .hint{display:block;margin-top:7px;font-family:var(--serif);font-style:italic;
   font-size:.92rem;color:rgba(247,241,231,.5);}
 @media (max-width:600px){
@@ -644,6 +649,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
   .gate-sprig [data-len]{stroke-dashoffset:0!important;}
   .gate-sprig{opacity:.46!important;} .gate-frame{opacity:1!important;}
   .mote{display:none!important;}
+  .gname-state.wait::after{animation:none!important;}
   .sched::before{transform:none;}
 }
 @media print{
@@ -1713,6 +1719,7 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
        name, so retyping a name already checked costs nothing. */
     var known = {};   // name -> true on the chart, false not on it
     var tried = {};   // asked about, no answer: never ticked, never blocked
+    var pending = {}; // a check is in the air for this name right now
 
     function key(s) {
       return s.toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
@@ -1723,10 +1730,14 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
         var mark = input.nextElementSibling;
         var k = key(input.value.trim());
         var verdict = k ? known[k] : undefined;
+        var waiting = !!(k && pending[k]);
         input.classList.toggle("bad", verdict === false);
         if (!mark) return;
-        mark.className = "gname-state" + (verdict === true ? " ok" : verdict === false ? " no" : "");
-        mark.textContent = verdict === true ? "\u2713" : verdict === false ? "\u2715" : "";
+        mark.className = "gname-state" +
+          (waiting ? " wait" : verdict === true ? " ok" : verdict === false ? " no" : "");
+        mark.textContent = waiting ? "" : verdict === true ? "\u2713" : verdict === false ? "\u2715" : "";
+        mark.title = waiting ? "Checking our list" :
+          verdict === true ? "On our list" : verdict === false ? "Not on our list" : "";
       });
     }
 
@@ -1746,6 +1757,10 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
       });
       if (!asking.length || !RSVP_ENDPOINT) { paintNames(); if (done) done(); return; }
 
+      asking.forEach(function (n) { pending[key(n)] = true; });
+      paintNames();
+      var settle = function () { asking.forEach(function (n) { delete pending[key(n)]; }); };
+
       fetch(RSVP_ENDPOINT + "?names=" + encodeURIComponent(asking.join("|")))
         .then(function (r) { return r.json(); })
         .then(function (res) {
@@ -1754,6 +1769,7 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
           } else {
             markTried(asking);
           }
+          settle();
           paintNames();
           if (done) done();
         })
@@ -1762,6 +1778,7 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
              verified against the chart, so let their companions through
              rather than ask again on a request that will not answer. */
           markTried(asking);
+          settle();
           paintNames();
           if (done) done();
         });
