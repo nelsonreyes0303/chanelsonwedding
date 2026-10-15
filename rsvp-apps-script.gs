@@ -19,6 +19,8 @@
 var RSVP_SHEET  = 'Website RSVP';
 var GUEST_SHEET = 'GUEST LIST';
 var SEATS_SHEET = 'SEATS';   // optional: Invitation name | Seats
+var ROSTER_SHEET = 'CONFIRMED GUESTS';
+var ROSTER_STATUS_COL = 2;   // column B, the one holding Pending
 
 var GUEST_NAMES = 'Who is coming';
 var GUEST_NAMES_AT = 5;   // 1-based column, straight after Guests
@@ -54,6 +56,15 @@ function doPost(e) {
       clean_(p.note),
       clean_(p.sent)
     ]);
+
+    try {
+      markRoster_(p.party ? String(p.party).split(',') : [p.name],
+                  String(p.attending).toLowerCase() === 'yes');
+    } catch (rosterErr) {
+      // The reply is already recorded. A roster that cannot be reached is
+      // worth fixing later, not worth refusing the guest over.
+    }
+
     return json_({ ok: true });
   } catch (err) {
     return json_({ ok: false, error: String(err) });
@@ -127,6 +138,51 @@ function readSeats_() {
     if (name && n > 0) out[name] = n;
   }
   return out;
+}
+
+/**
+ * Answers each person on a reply in the roster, turning Pending into Yes or No.
+ *
+ * A name repeated down the column is several people sharing a placeholder —
+ * three rows of "Daddy +1" are three seats, not one written thrice. So each
+ * name takes the first row still unanswered, and the local copy is marked as
+ * it goes, letting one reply name the same placeholder more than once and
+ * answer a different row each time.
+ *
+ * Rows already answered are left alone unless every row for that name is
+ * answered, in which case the first is updated, so a guest who replies twice
+ * is not silently ignored. Nothing is ever cleared, and a name absent from
+ * the roster is skipped rather than added.
+ */
+function markRoster_(names, attending) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ROSTER_SHEET);
+  if (!sheet || sheet.getLastRow() < 1) return;
+
+  var rows = sheet.getRange(1, 1, sheet.getLastRow(), ROSTER_STATUS_COL).getValues();
+  var answer = attending ? 'Yes' : 'No';
+  var col = ROSTER_STATUS_COL - 1;
+
+  names.forEach(function (raw) {
+    var want = norm_(raw);
+    if (!want) return;
+
+    var answered = -1;
+    for (var i = 0; i < rows.length; i++) {
+      if (norm_(rows[i][0]) !== want) continue;
+      var status = tidy_(rows[i][col]);
+      if (status === '' || status.toLowerCase() === 'pending') {
+        sheet.getRange(i + 1, ROSTER_STATUS_COL).setValue(answer);
+        rows[i][col] = answer;
+        return;
+      }
+      if (answered === -1) answered = i;
+    }
+
+    if (answered !== -1) {
+      sheet.getRange(answered + 1, ROSTER_STATUS_COL).setValue(answer);
+      rows[answered][col] = answer;
+    }
+  });
 }
 
 /* ------------------------------------------------------------ guest lookup */
@@ -319,4 +375,20 @@ function checkGuestList() {
       oneWord.map(function (g) { return g.name; }).join(', '));
   }
   if (clashes.length) Logger.log('Repeated names: ' + clashes.join(', '));
+
+  // A name spelled one way on the chart and another on the roster turns the
+  // flip into a quiet no-op, so it is worth naming before the replies arrive.
+  var roster = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ROSTER_SHEET);
+  if (!roster || roster.getLastRow() < 1) {
+    Logger.log('No "' + ROSTER_SHEET + '" tab: replies will not flip anything.');
+    return;
+  }
+  var known = {};
+  roster.getRange(1, 1, roster.getLastRow(), 1).getValues()
+    .forEach(function (r) { var k = norm_(r[0]); if (k) known[k] = true; });
+  var missing = guests.filter(function (g) { return !known[norm_(g.name)]; });
+  Logger.log(missing.length
+    ? 'On the chart but not on the roster (' + missing.length + '): ' +
+      missing.map(function (g) { return g.name; }).join(', ')
+    : 'Every name on the chart is also on the roster.');
 }
