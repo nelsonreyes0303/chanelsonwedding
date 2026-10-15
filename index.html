@@ -1687,7 +1687,8 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
     function drawNames() {
       var coming = ($("input[name=attending]:checked", form) || {}).value === "yes";
       var total  = parseInt($("#r-guests").value, 10);
-      var rows   = (coming && total > 1) ? Math.min(total, 12) - 1 : 0;
+      var seats  = (invite && parseInt(invite.seats, 10)) || 12;
+      var rows   = (coming && total > 1) ? Math.min(total, seats) - 1 : 0;
       var kept   = $$(".gname", namesBox).map(function (i) { return i.value; });
       var seed   = (invite && invite.party) || [];
 
@@ -1822,10 +1823,28 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
           say("");
           $("#r-name").value = res.name;
 
+          var seats = parseInt(res.seats, 10) || 0;
           foundLine.hidden = false;
-          foundLine.textContent = res.table
-            ? "Found you, " + res.name + ". You are seated at " + res.table + "."
-            : "Found you, " + res.name + ".";
+          foundLine.textContent =
+            "Found you, " + res.name + "." +
+            (res.table ? " You are seated at " + res.table + "." : "") +
+            (seats ? " We have set aside " + seats +
+              (seats === 1 ? " seat" : " seats") + " for you." : "");
+
+          /* Reset either way: a second lookup must not inherit the allowance
+             of the guest looked up before it. */
+          var g = $("#r-guests");
+          if (seats) {
+            g.max = seats;
+            g.value = seats;
+            $("#guests-hint").textContent = seats === 1
+              ? "Your invitation is for one."
+              : "Up to " + seats + " in total, including yourself.";
+          } else {
+            g.removeAttribute("max");
+            g.value = "";
+            $("#guests-hint").textContent = "Please include yourself in the count.";
+          }
 
           rest.hidden = false;
           drawNames();
@@ -1873,9 +1892,12 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
       if (!invite) { say('Please find your invitation first.', true); $('#r-find').focus(); return; }
       if (!att)  { say('Please let us know if you can join us.', true); return; }
 
+      var seats = (invite && parseInt(invite.seats, 10)) || 0;
       var total = parseInt($('#r-guests').value, 10);
-      if (att.value === 'yes' && (!total || total < 1 || total > 12)) {
-        say('Please tell us how many of you are coming.', true);
+      if (att.value === 'yes' && (!total || total < 1 || total > (seats || 12))) {
+        say(seats
+          ? 'Please enter a number from 1 to ' + seats + '.'
+          : 'Please tell us how many of you are coming.', true);
         $('#r-guests').focus();
         return;
       }

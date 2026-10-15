@@ -18,6 +18,7 @@
 
 var RSVP_SHEET  = 'Website RSVP';
 var GUEST_SHEET = 'GUEST LIST';
+var SEATS_SHEET = 'SEATS';   // optional: Invitation name | Seats
 
 var GUEST_NAMES = 'Who is coming';
 var GUEST_NAMES_AT = 5;   // 1-based column, straight after Guests
@@ -74,7 +75,13 @@ function doGet(e) {
   try {
     var hit = findGuest_(q);
     if (!hit) return json_({ ok: true, found: false });
-    return json_({ ok: true, found: true, name: hit.name, table: hit.table });
+    return json_({
+      ok: true,
+      found: true,
+      name: hit.name,
+      table: hit.table,
+      seats: readSeats_()[norm_(hit.name)] || 0
+    });
   } catch (err) {
     return json_({ ok: false, error: String(err) });
   }
@@ -99,6 +106,27 @@ function checkNames_(raw) {
   } catch (err) {
     return json_({ ok: false, error: String(err) });
   }
+}
+
+/**
+ * Seats set aside per invitation, read from a tab of two columns: the name as
+ * it appears on the seating chart, and a number. The header row carries no
+ * number, so it drops out on its own and no row offset has to be guessed.
+ *
+ * The tab is optional. Without it every guest comes back with no allowance,
+ * and the form simply does not mention seats.
+ */
+function readSeats_() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SEATS_SHEET);
+  if (!sheet || sheet.getLastRow() < 1) return {};
+  var rows = sheet.getRange(1, 1, sheet.getLastRow(), 2).getValues();
+  var out = {};
+  for (var i = 0; i < rows.length; i++) {
+    var name = norm_(rows[i][0]);
+    var n = parseInt(rows[i][1], 10);
+    if (name && n > 0) out[name] = n;
+  }
+  return out;
 }
 
 /* ------------------------------------------------------------ guest lookup */
