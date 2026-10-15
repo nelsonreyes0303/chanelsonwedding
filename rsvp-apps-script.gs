@@ -7,17 +7,17 @@
  *   Who has access: Anyone
  * Copy the Web app URL into RSVP_ENDPOINT in index.html.
  *
- * Two tabs are used:
- *   GUEST_SHEET — the invitation list you fill in. One row per invitation.
- *   RSVP_SHEET  — one row appended per reply.
- * Both are created, with headers, on first use if they are missing.
- *
  * Redeploy after editing: Deploy -> Manage deployments -> edit -> New version.
  * A saved edit does nothing on its own; the live URL keeps serving the old one.
+ *
+ * GUEST_SHEET is read as the seating chart it already is: one column per
+ * table, the table's name at the top, a guest in every cell below it. The
+ * script only ever reads that tab — it never writes to it — so nothing can
+ * disturb the seating plan. Replies are appended to RSVP_SHEET instead.
  */
 
 var RSVP_SHEET  = 'Website RSVP';
-var GUEST_SHEET = 'Guest List';
+var GUEST_SHEET = 'GUEST LIST';
 
 var GUEST_NAMES = 'Who is coming';
 var GUEST_NAMES_AT = 5;   // 1-based column, straight after Guests
@@ -33,11 +33,9 @@ var COLUMNS = [
   'Sent from browser (ISO)'
 ];
 
-// Fill in the first three. 'Replied' is stamped for you when a reply lands,
-// so an empty cell there is someone still to chase.
-var GUEST_COLUMNS = ['Invitation name', 'Seats', 'Party members', 'Replied'];
-
 var MIN_QUERY = 3;        // shorter than this is not a search, it is a trawl
+var HEADER_MIN = 3;       // a row with this many filled cells is the table header row
+var SCAN_ROWS  = 25;      // how far down to hunt for that header row
 
 /* --------------------------------------------------------------- endpoints */
 
@@ -55,7 +53,6 @@ function doPost(e) {
       clean_(p.note),
       clean_(p.sent)
     ]);
-    markReplied_(p.name);
     return json_({ ok: true });
   } catch (err) {
     return json_({ ok: false, error: String(err) });
@@ -66,7 +63,7 @@ function doPost(e) {
  * With ?q= this answers the guest lookup. Without it, visiting the URL in a
  * browser shows a health check, which is handy after a deploy.
  *
- * The reply carries one invitation at a time and never a list, so the endpoint
+ * The reply carries one guest at a time and never a list, so the endpoint
  * confirms a name someone already knows rather than handing out the guest list.
  */
 function doGet(e) {
@@ -75,14 +72,7 @@ function doGet(e) {
   try {
     var hit = findGuest_(q);
     if (!hit) return json_({ ok: true, found: false });
-    return json_({
-      ok: true,
-      found: true,
-      name: hit.name,
-      seats: hit.seats,
-      party: hit.party,
-      replied: hit.replied
-    });
+    return json_({ ok: true, found: true, name: hit.name, table: hit.table });
   } catch (err) {
     return json_({ ok: false, error: String(err) });
   }
@@ -91,43 +81,72 @@ function doGet(e) {
 /* ------------------------------------------------------------ guest lookup */
 
 /**
+ * Flattens the seating chart into one entry per guest.
+ *
+ * The header row is found rather than hard-coded, so blank rows above it and
+ * columns added later both survive. Every column with a heading contributes
+ * its guests; the heading travels with them as their table.
+ */
+function readGuests_() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(GUEST_SHEET);
+  if (!sheet || sheet.getLastRow() < 2) return [];
+
+  var values = sheet.getDataRange().getValues();
+  var header = -1;
+  for (var r = 0; r < values.length && r < SCAN_ROWS; r++) {
+    var filled = 0;
+    for (var c = 0; c < values[r].length; c++) {
+      if (tidy_(values[r][c])) filled++;
+    }
+    if (filled >= HEADER_MIN) { header = r; break; }
+  }
+  if (header === -1) return [];
+
+  var out = [];
+  for (var col = 0; col < values[header].length; col++) {
+    var table = tidy_(values[header][col]);
+    if (!table) continue;
+    for (var row = header + 1; row < values.length; row++) {
+      var name = tidy_(values[row][col]);
+      if (name) out.push({ name: name, table: table });
+    }
+  }
+  return out;
+}
+
+/**
  * Three passes, each needing a single winner: an exact match, then one name
  * that starts the same way, then one name containing every word typed. A tie
- * returns nothing rather than guessing between two guests.
+ * returns nothing rather than guessing between two guests — so a sheet entry
+ * like a bare surname shared by three people will never resolve.
  */
 function findGuest_(q) {
   var want = norm_(q);
   if (want.length < MIN_QUERY) return null;
 
-  var sheet = getGuestSheet_();
-  if (sheet.getLastRow() < 2) return null;
-
-  var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, GUEST_COLUMNS.length).getValues();
-  var wantWords = want.split(' ');
+  var guests = readGuests_();
+  var words = want.split(' ');
   var exact = [], prefix = [], loose = [];
 
-  for (var i = 0; i < rows.length; i++) {
-    var name = String(rows[i][0] || '').trim();
-    if (!name) continue;
-    var got = norm_(name);
-    if (got === want) { exact.push(rows[i]); continue; }
-    if (got.indexOf(want) === 0 || want.indexOf(got) === 0) { prefix.push(rows[i]); continue; }
-    if (hasEveryWord_(got, wantWords)) loose.push(rows[i]);
+  for (var i = 0; i < guests.length; i++) {
+    var got = norm_(guests[i].name);
+    if (!got) continue;
+    if (got === want) { exact.push(guests[i]); continue; }
+    if (got.indexOf(want) === 0 || want.indexOf(got) === 0) { prefix.push(guests[i]); continue; }
+    if (hasEveryWord_(got, words)) loose.push(guests[i]);
   }
 
-  var hit = pickOne_(exact) || pickOne_(prefix) || pickOne_(loose);
-  if (!hit) return null;
-
-  return {
-    name: String(hit[0]).trim(),
-    seats: Math.max(1, parseInt(hit[1], 10) || 1),
-    party: splitNames_(hit[2]),
-    replied: String(hit[3] || '').trim() !== ''
-  };
+  return pickOne_(exact) || pickOne_(prefix) || pickOne_(loose);
 }
 
+/** One winner, or nothing. Two rows naming the same person at the same table
+ *  count as one, which is what a name repeated across a merged cell looks like. */
 function pickOne_(list) {
-  return list.length === 1 ? list[0] : null;
+  if (!list.length) return null;
+  for (var i = 1; i < list.length; i++) {
+    if (norm_(list[i].name) !== norm_(list[0].name)) return null;
+  }
+  return list[0];
 }
 
 function hasEveryWord_(haystack, words) {
@@ -146,27 +165,9 @@ function norm_(s) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
-function splitNames_(v) {
-  return String(v == null ? '' : v)
-    .split(/[,;\n]+/)
-    .map(function (s) { return s.trim(); })
-    .filter(function (s) { return s !== ''; });
-}
-
-/** Stamp the matching invitation so an unreplied row is visible at a glance. */
-function markReplied_(name) {
-  if (!name) return;
-  var sheet = getGuestSheet_();
-  if (sheet.getLastRow() < 2) return;
-  var want = norm_(name);
-  var names = sheet.getRange(2, 1, sheet.getLastRow() - 1, 1).getValues();
-  for (var i = 0; i < names.length; i++) {
-    if (norm_(names[i][0]) === want) {
-      sheet.getRange(i + 2, 4)
-        .setValue(Utilities.formatDate(new Date(), 'Asia/Manila', 'yyyy-MM-dd HH:mm'));
-      return;
-    }
-  }
+/** Cell text as a person would read it: no stray newlines or double spaces. */
+function tidy_(v) {
+  return String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
 }
 
 /* ------------------------------------------------------------------ sheets */
@@ -176,32 +177,13 @@ function getSheet_() {
   var sheet = ss.getSheetByName(RSVP_SHEET) || ss.insertSheet(RSVP_SHEET);
   // A tab that already exists but is still blank needs its headers too.
   if (sheet.getLastRow() === 0) {
-    writeHeader_(sheet, COLUMNS);
+    sheet.appendRow(COLUMNS);
+    sheet.getRange(1, 1, 1, COLUMNS.length).setFontWeight('bold');
+    sheet.setFrozenRows(1);
     return sheet;
   }
   addGuestNamesColumn_(sheet);
   return sheet;
-}
-
-function getGuestSheet_() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName(GUEST_SHEET);
-  if (!sheet) {
-    sheet = ss.insertSheet(GUEST_SHEET);
-    writeHeader_(sheet, GUEST_COLUMNS);
-    sheet.getRange(2, 1, 1, 3).setValues([['Nelson Reyes', 3, 'Chanel Reyes, Gabriel Reyes']]);
-    sheet.getRange(2, 1, 1, 3).setFontStyle('italic').setFontColor('#999999');
-    sheet.setColumnWidth(1, 220).setColumnWidth(3, 320);
-  } else if (sheet.getLastRow() === 0) {
-    writeHeader_(sheet, GUEST_COLUMNS);
-  }
-  return sheet;
-}
-
-function writeHeader_(sheet, columns) {
-  sheet.appendRow(columns);
-  sheet.getRange(1, 1, 1, columns.length).setFontWeight('bold');
-  sheet.setFrozenRows(1);
 }
 
 // Sheets written before the guest list existed are one column short. Open a
@@ -225,4 +207,42 @@ function json_(obj) {
   return ContentService
     .createTextOutput(JSON.stringify(obj))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+/* -------------------------------------------------------------------- test */
+
+/**
+ * Run this from the editor (Run -> checkGuestList) and read the log. It says
+ * how the sheet was understood and which names cannot be matched, without
+ * changing anything.
+ */
+function checkGuestList() {
+  var guests = readGuests_();
+  Logger.log('Guests found: ' + guests.length);
+  if (!guests.length) {
+    Logger.log('Nothing read. Is the tab named exactly "' + GUEST_SHEET + '"?');
+    return;
+  }
+
+  var tables = {};
+  var seen = {};
+  var clashes = [];
+  guests.forEach(function (g) {
+    tables[g.table] = (tables[g.table] || 0) + 1;
+    var k = norm_(g.name);
+    if (seen[k] && seen[k] !== g.name) clashes.push(g.name);
+    seen[k] = g.name;
+  });
+
+  Logger.log('Tables: ' + Object.keys(tables).join(' | '));
+  Logger.log('Sample: ' + guests.slice(0, 5).map(function (g) {
+    return g.name + ' -> ' + g.table;
+  }).join(', '));
+
+  var oneWord = guests.filter(function (g) { return norm_(g.name).split(' ').length < 2; });
+  if (oneWord.length) {
+    Logger.log('Single-word entries, hard to match: ' +
+      oneWord.map(function (g) { return g.name; }).join(', '));
+  }
+  if (clashes.length) Logger.log('Repeated names: ' + clashes.join(', '));
 }
