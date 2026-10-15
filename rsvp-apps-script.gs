@@ -18,7 +18,7 @@
 
 var RSVP_SHEET  = 'Website RSVP';
 var GUEST_SHEET = 'GUEST LIST';
-var SEATS_SHEET = 'SEATS';   // optional: Invitation name | Seats
+var SEATS_SHEET = 'Plus Ones';   // name/seats column pairs, side by side
 var ROSTER_SHEET = 'CONFIRMED GUESTS';
 var ROSTER_STATUS_COL = 2;   // column B, the one holding Pending
 
@@ -91,7 +91,7 @@ function doGet(e) {
       found: true,
       name: hit.name,
       table: hit.table,
-      seats: readSeats_()[norm_(hit.name)] || 0
+      seats: readSeats_()[norm_(hit.name)] || 1
     });
   } catch (err) {
     return json_({ ok: false, error: String(err) });
@@ -120,22 +120,34 @@ function checkNames_(raw) {
 }
 
 /**
- * Seats set aside per invitation, read from a tab of two columns: the name as
- * it appears on the seating chart, and a number. The header row carries no
- * number, so it drops out on its own and no row offset has to be guessed.
+ * Seats set aside per invitation, read from a tab of name-and-number pairs
+ * sitting side by side — one block per host, and room for more later.
  *
- * The tab is optional. Without it every guest comes back with no allowance,
- * and the form simply does not mention seats.
+ * The pairs are found rather than fixed: any header naming seats marks the
+ * number, and the column to its left holds the name. So a third block can be
+ * added beside the others without touching this.
+ *
+ * The tab is optional. A guest with no row there is simply one seat.
  */
 function readSeats_() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SEATS_SHEET);
-  if (!sheet || sheet.getLastRow() < 1) return {};
-  var rows = sheet.getRange(1, 1, sheet.getLastRow(), 2).getValues();
+  if (!sheet || sheet.getLastRow() < 2) return {};
+
+  var values = sheet.getDataRange().getValues();
+  var header = values[0] || [];
+  var pairs = [];
+  for (var c = 1; c < header.length; c++) {
+    if (/seat/i.test(tidy_(header[c]))) pairs.push({ name: c - 1, count: c });
+  }
+  if (!pairs.length) pairs.push({ name: 0, count: 1 });
+
   var out = {};
-  for (var i = 0; i < rows.length; i++) {
-    var name = norm_(rows[i][0]);
-    var n = parseInt(rows[i][1], 10);
-    if (name && n > 0) out[name] = n;
+  for (var r = 1; r < values.length; r++) {
+    for (var i = 0; i < pairs.length; i++) {
+      var name = norm_(values[r][pairs[i].name]);
+      var n = parseInt(values[r][pairs[i].count], 10);
+      if (name && n > 0) out[name] = n;
+    }
   }
   return out;
 }

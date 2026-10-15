@@ -532,7 +532,6 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
 .opt input:checked{border-color:var(--gold);}
 .opt input:checked::after{content:'';position:absolute;inset:3px;border-radius:50%;
   background:var(--gold);animation:popIn .3s var(--ease-back);}
-#fld-guests{transition:opacity .35s ease;}
 #fld-names[hidden]{display:none;}
 .lookup{display:flex;gap:10px;}
 .lookup input{flex:1 1 auto;min-width:0;}
@@ -1256,15 +1255,10 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
           </div>
         </fieldset>
       </div>
-      <div class="fld" id="fld-guests">
-        <label for="r-guests">How many of you are coming, in total?</label>
-        <input type="number" id="r-guests" name="guests" min="1" max="12" step="1" inputmode="numeric" placeholder="Including yourself">
-        <span class="hint" id="guests-hint">Please include yourself in the count.</span>
-      </div>
       <div class="fld" id="fld-names" hidden>
         <label id="names-label">Who is coming with you?</label>
         <div id="guest-names" role="group" aria-labelledby="names-label"></div>
-        <span class="hint">You are already counted &mdash; please name the rest of your party.</span>
+        <span class="hint">You are already counted. Leave a line blank if a seat will go unused.</span>
       </div>
       <div class="fld">
         <label for="r-note">A note for us (optional)</label>
@@ -1672,7 +1666,7 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
 
   /* -------------------------------------------------------------- RSVP FORM */
   (function rsvp() {
-    var form = $("#rsvp-form"), msg = $("#rsvp-msg"), guests = $("#fld-guests");
+    var form = $("#rsvp-form"), msg = $("#rsvp-msg");
     var namesFld = $("#fld-names"), namesBox = $("#guest-names");
     var findBtn = $("#r-find"), foundLine = $("#r-found"), rest = $("#rsvp-rest");
     var invite = null;   // the matched guest-list row, or null until one is found
@@ -1682,9 +1676,8 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
        n-1 rows. Values already typed survive a change to the total. */
     function drawNames() {
       var coming = ($("input[name=attending]:checked", form) || {}).value === "yes";
-      var total  = parseInt($("#r-guests").value, 10);
-      var seats  = (invite && parseInt(invite.seats, 10)) || 12;
-      var rows   = (coming && total > 1) ? Math.min(total, seats) - 1 : 0;
+      var seats  = (invite && parseInt(invite.seats, 10)) || 1;
+      var rows   = coming ? seats - 1 : 0;
       var kept   = $$(".gname", namesBox).map(function (i) { return i.value; });
       var seed   = (invite && invite.party) || [];
 
@@ -1705,7 +1698,6 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
       });
     }
 
-    $("#r-guests").addEventListener("input", drawNames);
 
     /* Companions are checked against the same chart as the sender, so a reply
        cannot quietly add someone who was never invited. Verdicts are kept by
@@ -1819,28 +1811,13 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
           say("");
           $("#r-name").value = res.name;
 
-          var seats = parseInt(res.seats, 10) || 0;
+          var seats = parseInt(res.seats, 10) || 1;
           foundLine.hidden = false;
           foundLine.textContent =
             "Found you, " + res.name + "." +
             (res.table ? " You are seated at " + res.table + "." : "") +
-            (seats ? " We have set aside " + seats +
-              (seats === 1 ? " seat" : " seats") + " for you." : "");
+            (seats > 1 ? " We have set aside " + seats + " seats for you." : "");
 
-          /* Reset either way: a second lookup must not inherit the allowance
-             of the guest looked up before it. */
-          var g = $("#r-guests");
-          if (seats) {
-            g.max = seats;
-            g.value = seats;
-            $("#guests-hint").textContent = seats === 1
-              ? "Your invitation is for one."
-              : "Up to " + seats + " in total, including yourself.";
-          } else {
-            g.removeAttribute("max");
-            g.value = "";
-            $("#guests-hint").textContent = "Please include yourself in the count.";
-          }
 
           rest.hidden = false;
           drawNames();
@@ -1862,13 +1839,7 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
     });
 
     $$('input[name=attending]', form).forEach(function (r) {
-      r.addEventListener('change', function () {
-        var coming = r.value === 'yes' && r.checked;
-        guests.style.opacity = coming ? '1' : '.35';
-        guests.style.pointerEvents = coming ? '' : 'none';
-        if (!coming) $('#r-guests').value = '';
-        drawNames();
-      });
+      r.addEventListener('change', drawNames);
     });
 
     function done(text) {
@@ -1888,22 +1859,8 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
       if (!invite) { say('Please find your invitation first.', true); $('#r-find').focus(); return; }
       if (!att)  { say('Please let us know if you can join us.', true); return; }
 
-      var seats = (invite && parseInt(invite.seats, 10)) || 0;
-      var total = parseInt($('#r-guests').value, 10);
-      if (att.value === 'yes' && (!total || total < 1 || total > (seats || 12))) {
-        say(seats
-          ? 'Please enter a number from 1 to ' + seats + '.'
-          : 'Please tell us how many of you are coming.', true);
-        $('#r-guests').focus();
-        return;
-      }
-
       var party = $$('.gname', namesBox).map(function (i) { return i.value.trim(); });
-      if (!namesFld.hidden && party.some(function (n) { return !n; })) {
-        say('Please name everyone coming with you.', true);
-        ($$('.gname', namesBox).filter(function (i) { return !i.value.trim(); })[0] || {}).focus();
-        return;
-      }
+      party = party.filter(function (n) { return n; });
 
       var unchecked = party.filter(function (n) {
         return n && !(key(n) in known) && !(key(n) in tried);
@@ -1922,7 +1879,7 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
       var data = {
         name: name,
         attending: att.value === 'yes' ? 'Yes' : 'No',
-        guests: $('#r-guests').value || '',
+        guests: att.value === 'yes' ? String(party.length + 1) : '',
         party: party.length ? [name].concat(party).join(', ') : '',
         note: $('#r-note').value.trim(),
         sent: new Date().toISOString()
