@@ -1844,9 +1844,10 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
 
           var seats = parseInt(res.seats, 10) || 1;
           foundLine.hidden = false;
+          /* The lookup still carries res.table, but the seating is not settled,
+             so the card says nothing about it yet. */
           foundLine.textContent =
             "Found you, " + res.name + "." +
-            (res.table ? " You are seated at " + res.table + "." : "") +
             (seats > 1 ? " We have set aside " + seats + " seats for you." : "");
 
 
