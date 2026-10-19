@@ -1,0 +1,543 @@
+<!DOCTYPE html><html><head><base target="_top"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Jost:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --olive:#353A22; --olive-deep:#252816; --gold:#B08D57; --gold-lt:#CDAE7C; --burgundy:#6B1F2E;
+  --paper:#FBF8F3; --card:#fff; --line:#E4DED2; --ink:#241E1B; --muted:#7A7064;
+  --ok:#3F6B45; --ok-bg:#EAF1EA; --wait:#C49A52; --wait-bg:#FAF0DC; --no:#B08080; --no-bg:#F6EAEA;
+  --sans:'Jost',system-ui,sans-serif; --serif:'Cormorant Garamond',Georgia,serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:14px}
+.bar{background:var(--olive-deep);color:#F3EFE6;padding:12px 18px;display:flex;align-items:center;gap:13px;flex-wrap:wrap}
+.bar h1{font-family:var(--serif);font-size:19px;font-weight:500}
+.bar .sub{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#9E9683}
+.bar .save{margin-left:auto;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold-lt);opacity:0;transition:opacity .25s}
+.bar .save.on{opacity:1}
+.nav{background:var(--olive);display:flex;padding:0 10px;overflow-x:auto}
+.nav button{background:none;border:0;color:#CFC9B8;font-family:var(--sans);font-size:10.5px;letter-spacing:.17em;
+  text-transform:uppercase;padding:12px 15px;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
+.nav button.on{color:#fff;border-bottom-color:var(--gold-lt)}
+.wrap{max-width:1280px;margin:0 auto;padding:16px 18px 70px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(136px,1fr));gap:10px;margin-bottom:18px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.stat b{display:block;font-family:var(--serif);font-size:27px;font-weight:600;line-height:1.1}
+.stat span{font-size:9.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+.stat.g b{color:var(--ok)} .stat.a b{color:#9A6B1E} .stat.r b{color:#8C3A3A}
+.meter{height:5px;background:var(--line);border-radius:3px;margin-top:8px;overflow:hidden}
+.meter i{display:block;height:100%;background:var(--gold)}
+.tools{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}
+input,select{font-family:var(--sans);font-size:13px;padding:8px 10px;border:1px solid var(--line);
+  border-radius:7px;background:var(--card);color:var(--ink)}
+#q{flex:1;min-width:170px}
+.seg{display:flex;border:1px solid var(--line);border-radius:18px;overflow:hidden;background:var(--card)}
+.seg button{border:0;background:none;padding:7px 13px;font-family:var(--sans);font-size:10px;letter-spacing:.09em;
+  text-transform:uppercase;cursor:pointer;color:var(--muted)}
+.seg button.on{background:var(--olive);color:#fff}
+.btn{background:var(--burgundy);color:#fff;border:0;border-radius:7px;padding:9px 14px;font-family:var(--sans);
+  font-size:10px;letter-spacing:.15em;text-transform:uppercase;cursor:pointer}
+.btn.ghost{background:none;color:var(--olive);border:1px solid var(--line)}
+.btn:disabled{opacity:.5;cursor:default}
+.hh{background:var(--card);border:1px solid var(--line);border-radius:10px;margin-bottom:8px;overflow:hidden}
+.hh.sel{border-color:var(--gold);box-shadow:0 0 0 2px rgba(176,141,87,.15)}
+.hrow{display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer}
+.hrow:hover{background:#FDFBF7}
+.cb{width:16px;height:16px;flex:0 0 auto;accent-color:var(--olive)}
+.caret{color:var(--muted);font-size:10px;width:10px;flex:0 0 auto;transition:transform .18s}
+.hh.open .caret{transform:rotate(90deg)}
+.hname{font-family:var(--serif);font-size:16.5px;flex:1;min-width:0}
+.hmeta{font-size:11px;color:var(--muted);margin-top:1px;font-family:var(--sans)}
+.side{font-size:9px;letter-spacing:.13em;text-transform:uppercase;padding:3px 8px;border-radius:4px;flex:0 0 auto;
+  background:#EFEFE7;color:#5A5A48}
+.tbl{font-size:12px;color:var(--muted);flex:0 0 auto;min-width:108px}
+.tbl.none{color:#9A6B1E;font-style:italic}
+.dots{display:flex;gap:3px;flex:0 0 auto}
+.d{width:8px;height:8px;border-radius:50%}
+.d.ok{background:var(--ok)} .d.wait{background:var(--wait)} .d.no{background:var(--no)}
+.pill{display:inline-block;font-size:9px;letter-spacing:.1em;text-transform:uppercase;padding:4px 9px;border-radius:20px;flex:0 0 auto}
+.pill.ok{background:var(--ok-bg);color:var(--ok)} .pill.wait{background:var(--wait-bg);color:#9A6B1E}
+.pill.no{background:var(--no-bg);color:#8C3A3A} .pill.part{background:#EEF1F5;color:#4A5668}
+.members{border-top:1px solid #F0EBE1;background:#FDFCF9;padding:3px 14px 9px 50px;display:none}
+.hh.open .members{display:block}
+.m{display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #F3EEE4;font-size:13px}
+.m:last-of-type{border-bottom:0}
+.m .mn{flex:1}
+.m select{font-size:11px;padding:4px 7px}
+.ico{width:26px;height:26px;border:1px solid var(--line);background:var(--card);border-radius:6px;cursor:pointer;
+  color:var(--muted);font-size:12px;flex:0 0 auto}
+.ico:hover{border-color:var(--gold);color:var(--olive)}
+.bulk{position:sticky;bottom:12px;background:var(--olive-deep);color:#fff;border-radius:10px;padding:10px 14px;
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;box-shadow:0 10px 26px rgba(0,0,0,.24);margin-top:12px}
+.bulk b{font-family:var(--serif);font-size:15px;font-weight:500}
+.bulk select{font-size:11px;padding:6px 8px;border-color:transparent}
+.bulk .x{margin-left:auto;background:none;border:0;color:#B9B2A0;cursor:pointer;font-size:16px}
+.floor{display:grid;grid-template-columns:258px 1fr;gap:14px}
+.pool{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:13px;align-self:start}
+.pool h3{font-family:var(--serif);font-size:16px}
+.pool .hint{font-size:11px;color:var(--muted);margin-bottom:10px}
+.plist{max-height:420px;overflow:auto;display:flex;flex-direction:column;gap:5px}
+.pguest{display:flex;align-items:center;gap:8px;padding:7px 9px;border:1px solid var(--line);border-radius:7px;
+  font-size:12.5px;cursor:pointer;background:var(--card)}
+.pguest:hover{border-color:var(--gold)}
+.pguest.pick{background:var(--olive);color:#fff;border-color:var(--olive)}
+.tables{display:grid;grid-template-columns:repeat(auto-fill,minmax(206px,1fr));gap:12px;align-content:start}
+.t{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:12px 11px 10px;text-align:center;cursor:pointer}
+.t:hover{border-color:var(--gold)}
+.t.drop{border-color:var(--ok);box-shadow:0 0 0 3px rgba(63,107,69,.13)}
+.t.full{border-color:#E0CDA6;background:#FEFBF4}
+.t.over{border-color:var(--burgundy);background:#FDF4F4}
+.t h4{font-family:var(--serif);font-size:15.5px;font-weight:600}
+.rt{position:relative;width:120px;height:120px;margin:7px auto 8px}
+.rt .top{position:absolute;inset:25px;border-radius:50%;background:#F5F1E8;border:1px solid var(--line);
+  display:grid;place-items:center;font-family:var(--serif);font-size:16px;color:var(--muted)}
+.rt .s{position:absolute;left:50%;top:50%;width:13px;height:13px;margin:-6.5px 0 0 -6.5px;border-radius:50%;
+  border:1px solid var(--line);background:#fff}
+.rt .s.ok{background:var(--ok);border-color:var(--ok)}
+.rt .s.wait{background:var(--wait);border-color:var(--wait)}
+.rt .s.no{background:var(--no);border-color:var(--no)}
+.t .cap{font-size:11px;color:var(--muted)}
+.t.over .cap{color:var(--burgundy);font-weight:500}
+.t .over-note{margin-top:7px;background:#F7E4E4;border-radius:6px;padding:7px 8px;font-size:10.5px;
+  line-height:1.4;color:var(--burgundy);text-align:left}
+.legend{display:flex;gap:13px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-bottom:11px}
+.legend span{display:flex;align-items:center;gap:6px}
+.note{background:var(--card);border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:8px;padding:12px 14px;margin-bottom:9px}
+.note q{font-family:var(--serif);font-size:15px;font-style:italic;display:block;margin:5px 0 0;color:#3A322C}
+.warn{background:#FDF6EC;border:1px solid #EBD9B8;border-radius:9px;padding:13px 15px;margin-bottom:10px}
+.warn h4{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:#9A6B1E;margin-bottom:6px}
+.warn p{font-size:12.5px;color:#5C5147;line-height:1.55}
+.warn code{background:#F3E7D0;padding:1px 5px;border-radius:4px;font-size:11.5px}
+.warn.good{background:#EFF4EF;border-color:#CADBCB} .warn.good h4{color:var(--ok)}
+.warn.bad{background:#FDF4F4;border-color:#E7C9C9} .warn.bad h4{color:var(--burgundy)}
+.modal{position:fixed;inset:0;background:rgba(30,26,18,.5);display:grid;place-items:center;padding:18px;z-index:30}
+.sheet{background:var(--card);border-radius:12px;width:min(450px,100%);padding:21px;max-height:86vh;overflow:auto}
+.sheet h3{font-family:var(--serif);font-size:20px;font-weight:600}
+.sheet .hint{font-size:11.5px;color:var(--muted);margin-bottom:15px}
+.f{margin-bottom:12px} .f label{display:block;font-size:9.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+.f input,.f select{width:100%}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.acts{display:flex;gap:8px;margin-top:17px}.acts .btn{flex:1}
+.seat{display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid #F2EDE3;font-size:13px}
+.seat:last-of-type{border-bottom:0} .seat .nm{flex:1}
+.empty{text-align:center;padding:50px 20px;color:var(--muted)}
+.empty h3{font-family:var(--serif);font-size:21px;color:var(--ink);margin-bottom:7px}
+.hide{display:none}
+@media(max-width:860px){ .floor{grid-template-columns:1fr} .plist{max-height:190px} }
+@media(max-width:700px){ .wrap{padding:13px 11px 60px} .tbl,.side{display:none} .members{padding-left:34px} }
+</style></head><body>
+
+<div class="bar">
+  <h1>Guest List</h1><span class="sub">Nelson &amp; Chanel · 6 Dec 2026</span>
+  <span class="save" id="save">Saved</span>
+</div>
+<div class="nav">
+  <button class="on" data-v="guests">Guests</button>
+  <button data-v="tables">Tables</button>
+  <button data-v="replies">Replies</button>
+  <button data-v="issues">Needs attention</button>
+</div>
+<div class="wrap" id="app"><div class="empty"><h3>Loading…</h3></div></div>
+<div class="modal hide" id="m"><div class="sheet" id="msheet"></div></div>
+
+<script>
+var D = null, view = 'guests', pick = null, sel = {}, open = {};
+var f = { q:'', side:'all', status:'all' };
+var U = 'Not yet seated';
+
+function call(fn, args, done){
+  google.script.run.withSuccessHandler(function(d){ D = d; if(done) done(); render(); flash(); })
+    .withFailureHandler(function(e){ alert('Could not save: ' + e.message); render(); })
+    [fn].apply(null, args || []);
+}
+function flash(){ var s=document.getElementById('save'); s.classList.add('on'); setTimeout(function(){s.classList.remove('on')},1400); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]}); }
+function cls(st){ return st==='Coming'?'ok':st==='Cannot come'?'no':'wait'; }
+
+/* Guests are grouped by household for display. The sheet stays one row per
+   person; the grouping is read from the Household column each time. */
+function households(){
+  var by = {}, order = [];
+  D.guests.forEach(function(g){
+    var k = g.household || g.name;
+    if(!by[k]){ by[k] = { name:k, members:[] }; order.push(k); }
+    by[k].members.push(g);
+  });
+  return order.map(function(k){
+    var h = by[k], head = h.members.filter(function(m){return m.name===k})[0] || h.members[0];
+    h.side = head.side; h.table = head.table; h.seats = head.seats;
+    h.replied = head.replied; h.note = head.note;
+    h.coming = h.members.filter(function(m){return m.status==='Coming'}).length;
+    h.no = h.members.filter(function(m){return m.status==='Cannot come'}).length;
+    h.wait = h.members.filter(function(m){return m.status==='No reply'}).length;
+    return h;
+  });
+}
+function visible(hs){
+  return hs.filter(function(h){
+    if(f.side!=='all' && h.side!==f.side) return false;
+    if(f.status==='coming' && !h.coming) return false;
+    if(f.status==='wait' && !h.wait) return false;
+    if(f.status==='no' && !h.no) return false;
+    if(f.q){
+      var q = f.q.toLowerCase();
+      if(h.name.toLowerCase().indexOf(q)===-1 &&
+         !h.members.some(function(m){return m.name.toLowerCase().indexOf(q)>-1})) return false;
+    }
+    return true;
+  });
+}
+function stats(){
+  var g = D.guests;
+  return {
+    coming: g.filter(function(x){return x.status==='Coming'}).length,
+    wait:   g.filter(function(x){return x.status==='No reply'}).length,
+    no:     g.filter(function(x){return x.status==='Cannot come'}).length,
+    total:  g.length,
+    houses: households().length
+  };
+}
+function seatedAt(t){ return D.guests.filter(function(g){return g.table===t}); }
+
+function render(){
+  if(!D){ return; }
+  if(!D.ready){
+    document.getElementById('app').innerHTML =
+      '<div class="empty"><h3>No GUESTS tab yet</h3><p>Run buildGuests() in the RSVP script project, ' +
+      'then reload this page.</p></div>';
+    return;
+  }
+  document.querySelectorAll('.nav button').forEach(function(b){ b.classList.toggle('on', b.dataset.v===view); });
+  var s = stats(), out =
+    '<div class="stats">' +
+    '<div class="stat g"><b>'+s.coming+'</b><span>Coming</span></div>' +
+    '<div class="stat a"><b>'+s.wait+'</b><span>No reply yet</span></div>' +
+    '<div class="stat r"><b>'+s.no+'</b><span>Cannot come</span></div>' +
+    '<div class="stat"><b>'+s.houses+'</b><span>Households</span></div>' +
+    '<div class="stat"><b>'+s.coming+'<small style="font-size:14px;color:var(--muted)"> / '+s.total+
+      '</small></b><span>Seats taken</span><div class="meter"><i style="width:'+
+      (s.total?Math.round(s.coming/s.total*100):0)+'%"></i></div></div></div>';
+  out += view==='guests' ? viewGuests() : view==='tables' ? viewTables() :
+         view==='replies' ? viewReplies() : viewIssues();
+  document.getElementById('app').innerHTML = out;
+  bind();
+}
+
+function viewGuests(){
+  var hs = visible(households()), n = Object.keys(sel).length;
+  var sides = (D.sides||[]).map(function(x){
+    return '<button data-side="'+esc(x)+'"'+(f.side===x?' class="on"':'')+'>'+esc(x)+'</button>'; }).join('');
+  var out =
+    '<div class="tools"><input id="q" type="search" placeholder="Search guests or households…" value="'+esc(f.q)+'">' +
+    '<div class="seg" id="segside"><button data-side="all"'+(f.side==='all'?' class="on"':'')+'>All</button>'+sides+'</div>' +
+    '<div class="seg" id="segstat">' +
+      ['all|All','coming|Coming','wait|No reply','no|Declined'].map(function(p){
+        var a=p.split('|'); return '<button data-st="'+a[0]+'"'+(f.status===a[0]?' class="on"':'')+'>'+a[1]+'</button>'; }).join('') +
+    '</div><button class="btn" id="addg">+ Add guest</button></div>';
+
+  if(!hs.length) return out + '<div class="empty"><h3>Nothing matches</h3><p>Try clearing the filters.</p></div>';
+
+  out += hs.map(function(h){
+    var all = h.members.length, pill =
+      h.coming===all ? '<span class="pill ok">All coming</span>' :
+      h.no===all ? '<span class="pill no">Cannot come</span>' :
+      h.coming ? '<span class="pill part">'+h.coming+' of '+all+'</span>' :
+      '<span class="pill wait">No reply</span>';
+    return '<div class="hh'+(sel[h.name]?' sel':'')+(open[h.name]?' open':'')+'" data-h="'+esc(h.name)+'">' +
+      '<div class="hrow"><input type="checkbox" class="cb"'+(sel[h.name]?' checked':'')+'>' +
+      '<span class="caret">&#9654;</span><div class="hname">'+esc(h.name)+
+      '<div class="hmeta">'+all+(all===1?' guest':' guests')+
+        (h.replied?' · replied '+esc(h.replied.split(' ')[0]):' · no reply yet')+'</div></div>' +
+      (h.side?'<span class="side">'+esc(h.side)+'</span>':'') +
+      '<span class="tbl'+(h.table?'':' none')+'">'+esc(h.table||U)+'</span>' +
+      '<span class="dots">'+h.members.map(function(m){return '<i class="d '+cls(m.status)+'"></i>'}).join('')+'</span>' +
+      pill+'</div>' +
+      '<div class="members">'+h.members.map(function(m){
+        return '<div class="m"><span class="mn">'+esc(m.name)+'</span>' +
+          '<select data-row="'+m.row+'">'+['Coming','No reply','Cannot come'].map(function(o){
+            return '<option'+(m.status===o?' selected':'')+'>'+o+'</option>'; }).join('')+'</select>' +
+          '<button class="ico edit" data-row="'+m.row+'">&#9998;</button></div>'; }).join('') +
+        '<div class="m" style="padding-top:9px"><button class="btn ghost addto" data-h="'+esc(h.name)+
+        '" style="padding:6px 11px">+ Add person</button></div></div></div>';
+  }).join('');
+
+  if(n) out += '<div class="bulk"><b>'+n+(n===1?' household':' households')+' selected</b>' +
+    '<select id="bt"><option>Move to table…</option>'+
+      [U].concat(D.tables.map(function(t){return t.name})).map(function(t){
+        return '<option>'+esc(t)+'</option>'}).join('')+'</select>' +
+    '<select id="bs"><option>Set status…</option><option>Coming</option><option>No reply</option><option>Cannot come</option></select>' +
+    '<button class="btn ghost" id="brm">Remove</button><button class="x" id="bx">&#10005;</button></div>';
+  return out;
+}
+
+function viewTables(){
+  var un = D.guests.filter(function(g){return !g.table});
+  var over = D.tables.filter(function(t){return seatedAt(t.name).length>t.capacity}).length;
+  var out =
+    '<div class="legend"><span><i class="d ok"></i>Coming</span><span><i class="d wait"></i>No reply</span>' +
+    '<span><i class="d no"></i>Cannot come</span><span>&#9675; Empty seat</span>' +
+    '<span style="margin-left:auto">Click a guest, then a table</span></div>' +
+    '<div class="tools"><button class="btn ghost" id="chk">Check the plan</button>' +
+    '<button class="btn" id="addt">+ Add table</button>' +
+    (over?'<span style="color:var(--burgundy);font-size:12px">'+over+' table'+(over>1?'s':'')+' over capacity</span>':'') +
+    '</div><div class="floor"><aside class="pool"><h3>Not yet seated</h3>' +
+    '<p class="hint">'+un.length+(un.length===1?' guest':' guests')+'</p><div class="plist">' +
+    (un.length?un.map(function(g){
+      return '<div class="pguest'+(pick===g.row?' pick':'')+'" data-row="'+g.row+'"><i class="d '+cls(g.status)+
+             '"></i>'+esc(g.name)+'</div>'; }).join('')
+     :'<p class="hint">Everyone has a table.</p>') +
+    '</div></aside><main class="tables">';
+
+  out += D.tables.map(function(t){
+    var at = seatedAt(t.name), over = at.length>t.capacity, full = at.length===t.capacity;
+    var n = Math.max(t.capacity, at.length), ring = '';
+    for(var i=0;i<n;i++){
+      var a = (360/n)*i-90, g = at[i];
+      ring += '<i class="s '+(g?cls(g.status):'')+'" style="transform:rotate('+a+
+              'deg) translate(48px) rotate('+(-a)+'deg)"></i>';
+    }
+    return '<div class="t'+(over?' over':full?' full':'')+(pick!==null&&!over?' drop':'')+
+      '" data-t="'+esc(t.name)+'"><h4>'+esc(t.name)+'</h4>' +
+      '<div class="rt"><div class="top">'+at.length+'</div>'+ring+'</div>' +
+      '<div class="cap">'+(over?'Over by '+(at.length-t.capacity)
+        :at.length+' of '+t.capacity+' · '+at.filter(function(x){return x.status==='Coming'}).length+' coming')+'</div>' +
+      (over?'<div class="over-note"><strong>'+at.length+' guests in '+t.capacity+' seats.</strong> ' +
+        'Move someone, or raise this table to '+at.length+'.</div>':'') + '</div>';
+  }).join('');
+  return out + '</main></div>';
+}
+
+function viewReplies(){
+  var wait = D.guests.filter(function(g){return g.status==='No reply'}).length;
+  var out = '<div class="note"><strong>Still waiting on '+wait+' guests</strong>' +
+    '<div style="margin-top:9px"><button class="btn ghost" id="copy">Copy their names</button></div></div>';
+  if(!D.replies.length) return out + '<div class="empty"><h3>No replies yet</h3></div>';
+  return out + D.replies.map(function(r){
+    return '<div class="note"><strong>'+esc(r.name)+'</strong> · '+
+      (r.attending==='Yes'? esc(r.count)+' coming':'cannot come')+
+      (r.when?' · '+esc(r.when):'') +
+      (r.party?'<div class="hmeta" style="margin-top:4px">'+esc(r.party)+'</div>':'') +
+      (r.note?'<q>'+esc(r.note)+'</q>':'')+'</div>';
+  }).join('');
+}
+
+function viewIssues(){
+  var one = D.guests.filter(function(g){return g.name.trim().split(/\s+/).length<2});
+  var seen = {}, dupes = [];
+  D.guests.forEach(function(g){
+    var k = g.name.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+    if(seen[k]) { if(dupes.indexOf(g.name)===-1) dupes.push(g.name); } else seen[k]=1;
+  });
+  var un = D.guests.filter(function(g){return !g.table});
+  var ghost = D.guests.filter(function(g){return g.status==='Cannot come' && g.table});
+  var out = '';
+  if(one.length) out += '<div class="warn"><h4>Names the RSVP cannot match &mdash; '+one.length+'</h4>' +
+    '<p>Single words, so the lookup refuses to guess and tells the guest they are not on the list.<br><br>' +
+    one.map(function(g){return '<code>'+esc(g.name)+'</code>'}).join(' ')+'</p></div>';
+  if(dupes.length) out += '<div class="warn"><h4>Repeated names &mdash; '+dupes.length+'</h4>' +
+    '<p>Replies fill the first unanswered one, so afterwards you cannot tell which person is which.<br><br>' +
+    dupes.map(function(n){return '<code>'+esc(n)+'</code>'}).join(' ')+'</p></div>';
+  if(ghost.length) out += '<div class="warn bad"><h4>Seated but not coming &mdash; '+ghost.length+'</h4>' +
+    '<p>These hold seats they will not use. Releasing them frees '+ghost.length+'.<br><br>' +
+    ghost.map(function(g){return '<code>'+esc(g.name)+'</code>'}).join(' ')+'</p></div>';
+  if(un.length) out += '<div class="warn"><h4>Not yet seated &mdash; '+un.length+'</h4>' +
+    '<p>Including '+un.filter(function(g){return g.status==='Coming'}).length+
+    ' who have already said they are coming.</p></div>';
+  return out || '<div class="warn good"><h4>Nothing needs attention</h4><p>Every name is matchable, ' +
+    'everyone has a table, and no one is holding a seat they will not use.</p></div>';
+}
+
+/* ---------------------------------------------------------------- binding */
+function bind(){
+  var q = document.getElementById('q');
+  if(q) q.oninput = function(){ f.q = q.value; var p=q.selectionStart; render();
+    var n=document.getElementById('q'); if(n){n.focus(); n.setSelectionRange(p,p);} };
+  var ss = document.getElementById('segside');
+  if(ss) ss.querySelectorAll('button').forEach(function(b){ b.onclick=function(){ f.side=b.dataset.side; render(); }; });
+  var st = document.getElementById('segstat');
+  if(st) st.querySelectorAll('button').forEach(function(b){ b.onclick=function(){ f.status=b.dataset.st; render(); }; });
+
+  document.querySelectorAll('.hrow').forEach(function(r){
+    r.onclick = function(e){
+      var h = r.parentNode.dataset.h;
+      if(e.target.classList.contains('cb')){ if(e.target.checked) sel[h]=1; else delete sel[h]; render(); return; }
+      open[h] = !open[h]; render();
+    };
+  });
+  document.querySelectorAll('.members select').forEach(function(s){
+    s.onchange = function(e){ e.stopPropagation();
+      var g = D.guests.filter(function(x){return x.row==s.dataset.row})[0];
+      g.status = s.value; call('saveGuest',[g]); };
+  });
+  document.querySelectorAll('.members .m').forEach(function(m){ m.onclick=function(e){ e.stopPropagation(); }; });
+  document.querySelectorAll('.edit').forEach(function(b){
+    b.onclick = function(e){ e.stopPropagation(); editGuest(+b.dataset.row); };
+  });
+  document.querySelectorAll('.addto').forEach(function(b){
+    b.onclick = function(e){ e.stopPropagation(); editGuest(null, b.dataset.h); };
+  });
+  var ag = document.getElementById('addg'); if(ag) ag.onclick=function(){ editGuest(null); };
+
+  var bt = document.getElementById('bt');
+  if(bt) bt.onchange = function(){ if(bt.selectedIndex) doBulk('table', bt.value); };
+  var bs = document.getElementById('bs');
+  if(bs) bs.onchange = function(){ if(bs.selectedIndex) doBulk('status', bs.value); };
+  var brm = document.getElementById('brm');
+  if(brm) brm.onclick = function(){
+    var n = rowsOfSelection().length;
+    if(confirm('Remove '+n+' guest'+(n===1?'':'s')+' from the list? This cannot be undone here.'))
+      doBulk('remove'); };
+  var bx = document.getElementById('bx'); if(bx) bx.onclick=function(){ sel={}; render(); };
+
+  document.querySelectorAll('.pguest').forEach(function(e){
+    e.onclick = function(){ var r=+e.dataset.row; pick = (pick===r?null:r); render(); };
+  });
+  document.querySelectorAll('.t').forEach(function(e){
+    e.onclick = function(){
+      if(pick!==null){
+        var g = D.guests.filter(function(x){return x.row===pick})[0];
+        pick = null;
+        /* The picked row can vanish between choosing and clicking, if the data
+           reloaded or the guest was removed on another device. Drop the pick
+           rather than seating a ghost. */
+        if(!g){ render(); return; }
+        g.table = e.dataset.t; call('saveGuest',[g]); return;
+      }
+      openTable(e.dataset.t);
+    };
+  });
+  var chk = document.getElementById('chk'); if(chk) chk.onclick=checkPlan;
+  var addt = document.getElementById('addt'); if(addt) addt.onclick=addTable;
+  var cp = document.getElementById('copy'); if(cp) cp.onclick=copyWaiting;
+}
+function rowsOfSelection(){
+  var rows = [];
+  households().forEach(function(h){ if(sel[h.name]) h.members.forEach(function(m){ rows.push(m.row); }); });
+  return rows;
+}
+function doBulk(field, value){
+  var rows = rowsOfSelection();
+  if(!rows.length) return;
+  sel = {}; call('bulk',[rows, field, value]);
+}
+
+/* ----------------------------------------------------------------- modals */
+function shut(){ document.getElementById('m').classList.add('hide'); }
+function show(html){
+  document.getElementById('msheet').innerHTML = html;
+  document.getElementById('m').classList.remove('hide');
+}
+function editGuest(row, household){
+  var g = row ? D.guests.filter(function(x){return x.row===row})[0] : null;
+  var tables = [U].concat(D.tables.map(function(t){return t.name}));
+  show('<h3>'+(g?esc(g.name):'New guest')+'</h3><p class="hint">'+
+    (g? (g.replied?'Replied '+esc(g.replied):'No reply yet') : 'Added to '+esc(household||'their own household'))+'</p>' +
+    '<div class="f"><label>Full name</label><input id="e-n" value="'+esc(g?g.name:'')+'"></div>' +
+    '<div class="two"><div class="f"><label>Household</label><input id="e-h" value="'+
+      esc(g?g.household:(household||''))+'"></div>' +
+    '<div class="f"><label>Side</label><input id="e-sd" value="'+esc(g?g.side:'')+'"></div></div>' +
+    '<div class="two"><div class="f"><label>Table</label><select id="e-t">'+tables.map(function(t){
+      return '<option'+((g&&g.table===t)||(!g&&t===U)?' selected':'')+'>'+esc(t)+'</option>'}).join('')+'</select></div>' +
+    '<div class="f"><label>Reserved seats</label><input id="e-se" type="number" min="1" value="'+(g?g.seats:1)+'"></div></div>' +
+    '<div class="f"><label>Status</label><select id="e-st">'+['Coming','No reply','Cannot come'].map(function(o){
+      return '<option'+(g&&g.status===o?' selected':'')+'>'+o+'</option>'}).join('')+'</select></div>' +
+    (g&&g.note?'<div class="f"><label>Their note</label><input value="'+esc(g.note)+'" disabled></div>':'') +
+    '<div class="acts"><button class="btn ghost" onclick="shut()">Cancel</button>' +
+    (g?'<button class="btn ghost" style="color:var(--burgundy)" onclick="delGuest('+g.row+')">Remove</button>':'') +
+    '<button class="btn" onclick="saveEdit('+(g?g.row:'null')+')">Save</button></div>');
+}
+function saveEdit(row){
+  var g = (row ? D.guests.filter(function(x){return x.row===row})[0] : null) || {};
+  var o = {
+    row: row, name: document.getElementById('e-n').value.trim(),
+    household: document.getElementById('e-h').value.trim(),
+    side: document.getElementById('e-sd').value.trim(),
+    table: document.getElementById('e-t').value,
+    seats: document.getElementById('e-se').value,
+    status: document.getElementById('e-st').value,
+    replied: g.replied || '', note: g.note || ''
+  };
+  if(!o.name){ alert('A name is needed.'); return; }
+  shut(); call(row?'saveGuest':'addGuest',[o]);
+}
+function delGuest(row){
+  var g = D.guests.filter(function(x){return x.row===row})[0];
+  if(!confirm('Remove '+g.name+' from the list?')) return;
+  shut(); call('removeGuest',[row]);
+}
+function openTable(name){
+  var t = D.tables.filter(function(x){return x.name===name})[0], at = seatedAt(name);
+  var over = at.length>t.capacity;
+  show('<h3>'+esc(name)+'</h3><p class="hint">'+at.length+' of '+t.capacity+' seats'+
+    (over?' · <strong style="color:var(--burgundy)">over by '+(at.length-t.capacity)+'</strong>':'')+'</p>' +
+    (at.length?at.map(function(g){
+      return '<div class="seat"><i class="d '+cls(g.status)+'"></i><span class="nm">'+esc(g.name)+
+        '</span><button class="ico" onclick="unseat('+g.row+')">&#10005;</button></div>'; }).join('')
+      :'<p class="hint">Nobody here yet.</p>') +
+    '<div class="f" style="margin-top:16px"><label>Seats at this table</label>' +
+    '<input id="t-cap" type="number" min="1" value="'+t.capacity+'"></div>' +
+    '<div class="f"><label>Table name</label><input id="t-name" value="'+esc(name)+'"></div>' +
+    '<div class="acts"><button class="btn ghost" onclick="shut()">Close</button>' +
+    '<button class="btn" onclick="saveTable(\''+esc(name).replace(/'/g,"\\'")+'\')">Save</button></div>');
+}
+function unseat(row){
+  var g = D.guests.filter(function(x){return x.row===row})[0];
+  shut();
+  if(!g){ render(); return; }
+  g.table = ''; call('saveGuest',[g]);
+}
+function saveTable(name){
+  var cap = parseInt(document.getElementById('t-cap').value,10) || 1;
+  var nn = document.getElementById('t-name').value.trim();
+  shut();
+  if(nn && nn!==name) call('renameTable',[name, nn], function(){ call('setCapacity',[nn, cap]); });
+  else call('setCapacity',[name, cap]);
+}
+function addTable(){
+  var n = prompt('Name of the new table');
+  if(!n) return;
+  call('setCapacity',[n.trim(), 10]);
+}
+function checkPlan(){
+  var over = D.tables.filter(function(t){return seatedAt(t.name).length>t.capacity});
+  var ghost = D.guests.filter(function(g){return g.status==='Cannot come' && g.table});
+  var un = D.guests.filter(function(g){return !g.table});
+  var seen = {}, twice = [];
+  D.guests.forEach(function(g){
+    var k = g.name.toLowerCase().replace(/[^a-z0-9]+/g,' ').trim() + '|' + g.table;
+    if(g.table){ if(seen[k]) twice.push(g.name); else seen[k]=1; }
+  });
+  var h = '<h3>Checking the plan</h3><p class="hint">Before anything goes to the printer</p>';
+  h += over.length
+    ? '<div class="warn bad"><h4>Over capacity &mdash; '+over.length+'</h4><p>'+over.map(function(t){
+        return '<code>'+esc(t.name)+'</code> has '+seatedAt(t.name).length+' in '+t.capacity+' seats'; }).join('<br>')+'</p></div>'
+    : '<div class="warn good"><h4>No table is over capacity</h4><p>Every table fits the people at it.</p></div>';
+  if(ghost.length) h += '<div class="warn"><h4>Seated but not coming &mdash; '+ghost.length+'</h4><p>' +
+    ghost.map(function(g){return '<code>'+esc(g.name)+'</code>'}).join(' ')+
+    '<br><br>Releasing them frees '+ghost.length+' seat'+(ghost.length===1?'':'s')+'.</p></div>';
+  if(un.length) h += '<div class="warn"><h4>Not yet seated &mdash; '+un.length+'</h4><p>Including '+
+    un.filter(function(g){return g.status==='Coming'}).length+' already coming.</p></div>';
+  h += twice.length
+    ? '<div class="warn bad"><h4>Seated twice &mdash; '+twice.length+'</h4><p>'+
+      twice.map(function(n){return '<code>'+esc(n)+'</code>'}).join(' ')+'</p></div>'
+    : '<div class="warn good"><h4>No one seated twice</h4><p>Every guest appears at one table.</p></div>';
+  h += '<div class="acts"><button class="btn ghost" onclick="shut()">Close</button></div>';
+  show(h);
+}
+function copyWaiting(){
+  var names = D.guests.filter(function(g){return g.status==='No reply'})
+    .map(function(g){return g.name}).join(', ');
+  var ta = document.createElement('textarea');
+  ta.value = names; document.body.appendChild(ta); ta.select();
+  try{ document.execCommand('copy'); alert('Copied '+names.split(', ').length+' names.'); }
+  catch(e){ prompt('Copy these:', names); }
+  document.body.removeChild(ta);
+}
+
+document.querySelectorAll('.nav button').forEach(function(b){
+  b.onclick = function(){ view = b.dataset.v; pick = null; render(); };
+});
+document.getElementById('m').onclick = function(e){ if(e.target.id==='m') shut(); };
+call('getAll');
+</script>
+</body></html>
