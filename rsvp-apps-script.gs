@@ -16,18 +16,32 @@
  * disturb the seating plan. Replies are appended to RSVP_SHEET instead.
  */
 
-/* The way in to the guest list manager.
+/* The way in to the guest list manager at chanelsonwedding.online/manage.html.
  *
- *   ADMIN_CODE     what you type on the RSVP page.
- *   ADMIN_APP_URL  the admin project's deployed web-app URL, handed back only
- *                  when the code matches. Leave it empty until that project
- *                  is deployed and the website will say so plainly.
+ * The code lives here, not in manage.html, because that page is public and
+ * this script is not. Changing it means editing this line and redeploying;
+ * nothing on the website moves. Everyone signed in is signed out by it.
  *
- * Both live here rather than in index.html, because index.html is a public
- * file anyone can read with Ctrl+U and this script is not. Changing the code
- * later means editing this line and redeploying — nothing on the website. */
-var ADMIN_CODE    = '123234';
-var ADMIN_APP_URL = '';
+ * It is typed once per device and then traded for a token that lasts a month,
+ * which is what lets it be long enough to be worth having. */
+var ADMIN_CODE  = 'chanelson-132611';
+var SESSION_DAYS = 30;
+
+/* Wrong codes are counted across everybody, because the endpoint cannot tell
+ * who is asking. Eight inside a quarter of an hour and it stops answering.
+ * That is blunt — a stranger hammering it locks the two of you out as well —
+ * but a guest list is better unreachable for fifteen minutes than guessable
+ * in an afternoon. */
+var MAX_TRIES      = 8;
+var TRY_WINDOW_MIN = 15;
+
+var TABLES_SHEET     = 'TABLES';
+var UNSEATED         = 'Not yet seated';
+var DEFAULT_CAPACITY = 10;
+
+/* 1-based columns of the GUESTS tab, in the order buildGuests writes them. */
+var GCOL   = { name:1, side:2, household:3, table:4, seats:5, status:6, replied:7, note:8 };
+var GWIDTH = 8;
 
 var RSVP_SHEET  = 'Website RSVP';
 var GUEST_SHEET = 'GUEST LIST';
@@ -60,7 +74,7 @@ var SCAN_ROWS  = 25;      // how far down to hunt for that header row
 function doPost(e) {
   try {
     var p = (e && e.parameter) || {};
-    if (p.admin) return adminDoor_(p.code);
+    if (p.op) return adminApi_(p);
     var sheet = getSheet_();
     sheet.appendRow([
       Utilities.formatDate(new Date(), 'Asia/Manila', 'yyyy-MM-dd HH:mm:ss'),
@@ -85,22 +99,6 @@ function doPost(e) {
   } catch (err) {
     return json_({ ok: false, error: String(err) });
   }
-}
-
-/**
- * Answers the passcode box on the RSVP page. A wrong code is told nothing
- * beyond "no", and waits a second and a half first, which turns guessing at
- * six digits from a few minutes of scripting into something nobody will sit
- * through. The manager behind the link is still Google-locked to the two of
- * you, so a lucky guess buys a URL and a sign-in refusal.
- */
-function adminDoor_(code) {
-  if (String(code || '').trim() !== ADMIN_CODE) {
-    Utilities.sleep(1500);
-    return json_({ ok: false });
-  }
-  if (!ADMIN_APP_URL) return json_({ ok: false, error: 'no-url' });
-  return json_({ ok: true, url: ADMIN_APP_URL });
 }
 
 /**
@@ -643,4 +641,308 @@ function checkGuestList() {
     ? 'On the chart but not on the roster (' + missing.length + '): ' +
       missing.map(function (g) { return g.name; }).join(', ')
     : 'Every name on the chart is also on the roster.');
+}
+
+
+/* ========================================================================
+   GUEST LIST MANAGER
+
+   The API behind chanelsonwedding.online/manage.html. It reads and writes
+   the GUESTS tab, which buildGuests() fills from the seating chart, and
+   reads Website RSVP for the replies. Table sizes live in a TABLES tab it
+   creates the first time one is set.
+
+   Every call arrives as a POST with op=<name>. Everything except login must
+   carry a token, and a request without a good one is answered 'auth' and
+   nothing else, so an unauthenticated caller never learns a guest's name.
+   ======================================================================== */
+
+function adminApi_(p) {
+  var op = String(p.op || '');
+  if (op === 'login') return adminLogin_(p.code);
+  if (!adminValid_(p.token)) return json_({ ok: false, error: 'auth' });
+
+  var args;
+  try { args = JSON.parse(p.args || '[]'); }
+  catch (err) { return json_({ ok: false, error: 'bad arguments' }); }
+
+  try {
+    switch (op) {
+      case 'getAll':      return json_({ ok: true, data: adminAll_() });
+      case 'saveGuest':   return adminWrite_(function () { adminSave_(args[0]); });
+      case 'addGuest':    return adminWrite_(function () { adminAdd_(args[0]); });
+      case 'removeGuest': return adminWrite_(function () { adminRemove_(args[0]); });
+      case 'bulk':        return adminWrite_(function () { adminBulk_(args[0], args[1], args[2]); });
+      case 'setCapacity': return adminWrite_(function () { adminCapacity_(args[0], args[1]); });
+      case 'renameTable': return adminWrite_(function () { adminRename_(args[0], args[1]); });
+    }
+    return json_({ ok: false, error: 'unknown request' });
+  } catch (err) {
+    return json_({ ok: false, error: String(err) });
+  }
+}
+
+/**
+ * Every write takes the lock and then hands back the whole list, so the page
+ * redraws from what the sheet actually holds rather than what it hoped for.
+ * Two tabs open on a phone and a laptop is the normal way to use this, and
+ * without the lock the later save silently wins.
+ */
+function adminWrite_(fn) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    fn();
+    return json_({ ok: true, data: adminAll_() });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/* ---------------------------------------------------------------- the door */
+
+function adminLogin_(code) {
+  var props = PropertiesService.getScriptProperties();
+  var now   = Date.now();
+
+  var tries = Number(props.getProperty('admin_tries') || 0);
+  var since = Number(props.getProperty('admin_since') || 0);
+  if (!since || now - since > TRY_WINDOW_MIN * 60000) { tries = 0; since = now; }
+
+  if (tries >= MAX_TRIES) {
+    return json_({
+      ok: false, error: 'locked',
+      minutes: Math.max(1, Math.ceil((TRY_WINDOW_MIN * 60000 - (now - since)) / 60000))
+    });
+  }
+
+  if (String(code || '').trim() !== ADMIN_CODE) {
+    Utilities.sleep(1500);
+    props.setProperty('admin_tries', String(tries + 1));
+    props.setProperty('admin_since', String(since));
+    return json_({ ok: false, error: 'code' });
+  }
+
+  props.deleteProperty('admin_tries');
+  props.deleteProperty('admin_since');
+  adminSweep_(props, now);
+
+  var token = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
+  props.setProperty('tok_' + token, String(now + SESSION_DAYS * 86400000));
+  return json_({ ok: true, token: token, data: adminAll_() });
+}
+
+function adminValid_(token) {
+  var t = String(token || '').trim();
+  if (!/^[0-9a-f]{64}$/.test(t)) return false;
+  var props = PropertiesService.getScriptProperties();
+  var until = Number(props.getProperty('tok_' + t) || 0);
+  if (!until) return false;
+  if (Date.now() > until) { props.deleteProperty('tok_' + t); return false; }
+  return true;
+}
+
+/** Expired tokens would otherwise pile up in the script's properties. */
+function adminSweep_(props, now) {
+  var all = props.getProperties();
+  Object.keys(all).forEach(function (k) {
+    if (k.indexOf('tok_') === 0 && Number(all[k]) < now) props.deleteProperty(k);
+  });
+}
+
+/* ---------------------------------------------------------------- reading */
+
+function adminAll_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(GUESTS_SHEET);
+  if (!sheet || sheet.getLastRow() < 2) {
+    return { ready: false, guests: [], tables: [], replies: [], sides: [] };
+  }
+
+  var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, GWIDTH).getValues();
+  var guests = [];
+  for (var i = 0; i < rows.length; i++) {
+    var name = String(rows[i][GCOL.name - 1] || '').trim();
+    if (!name) continue;
+    guests.push({
+      row: i + 2,                                  // the sheet row, to write back to
+      name: name,
+      side: String(rows[i][GCOL.side - 1] || '').trim(),
+      household: String(rows[i][GCOL.household - 1] || '').trim() || name,
+      table: String(rows[i][GCOL.table - 1] || '').trim(),
+      seats: parseInt(rows[i][GCOL.seats - 1], 10) || 1,
+      status: adminStatus_(rows[i][GCOL.status - 1]),
+      replied: String(rows[i][GCOL.replied - 1] || '').trim(),
+      note: String(rows[i][GCOL.note - 1] || '').trim()
+    });
+  }
+
+  return {
+    ready: true,
+    guests: guests,
+    tables: adminTables_(ss, guests),
+    replies: adminReplies_(ss),
+    sides: adminUniq_(guests.map(function (g) { return g.side; }).filter(String))
+  };
+}
+
+/** Coming / No reply / Cannot come, however the sheet happens to spell it. */
+function adminStatus_(v) {
+  var s = String(v || '').trim().toLowerCase();
+  if (!s || s === 'pending') return 'No reply';
+  if (s === 'yes' || s === 'coming' || s === 'confirmed') return 'Coming';
+  if (s === 'no' || s === 'declined' || s.indexOf('cannot') === 0) return 'Cannot come';
+  return 'No reply';
+}
+
+/**
+ * Capacities, kept in their own tab so a table can be bigger than the number
+ * of people currently sitting at it. A table nobody has sized yet is assumed
+ * to hold DEFAULT_CAPACITY, or everyone already there if that is more.
+ */
+function adminTables_(ss, guests) {
+  var sheet = ss.getSheetByName(TABLES_SHEET);
+  var caps = {};
+  if (sheet && sheet.getLastRow() > 1) {
+    sheet.getRange(2, 1, sheet.getLastRow() - 1, 2).getValues().forEach(function (r) {
+      var n = String(r[0] || '').trim(), c = parseInt(r[1], 10);
+      if (n && c > 0) caps[n] = c;
+    });
+  }
+
+  var order = [], seated = {};
+  guests.forEach(function (g) {
+    if (!g.table) return;
+    if (!seated[g.table]) { seated[g.table] = 0; order.push(g.table); }
+    seated[g.table]++;
+  });
+  Object.keys(caps).forEach(function (n) { if (order.indexOf(n) === -1) order.push(n); });
+
+  return order.map(function (n) {
+    return { name: n, capacity: caps[n] || Math.max(DEFAULT_CAPACITY, seated[n] || 0) };
+  });
+}
+
+function adminReplies_(ss) {
+  var sheet = ss.getSheetByName(RSVP_SHEET);
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  var values = sheet.getDataRange().getValues();
+  var head = values[0].map(function (h) { return String(h || '').trim().toLowerCase(); });
+  var iWhen = head.indexOf('received (manila)'), iName = head.indexOf('name'),
+      iAtt = head.indexOf('attending'), iCount = head.indexOf('guests'),
+      iParty = head.indexOf('who is coming'), iNote = head.indexOf('note');
+
+  var out = [];
+  for (var r = values.length - 1; r >= 1 && out.length < 60; r--) {
+    var n = iName > -1 ? String(values[r][iName] || '').trim() : '';
+    if (!n) continue;
+    out.push({
+      when:  iWhen  > -1 ? String(values[r][iWhen]  || '') : '',
+      name:  n,
+      attending: iAtt   > -1 ? String(values[r][iAtt]   || '') : '',
+      count:     iCount > -1 ? String(values[r][iCount] || '') : '',
+      party:     iParty > -1 ? String(values[r][iParty] || '') : '',
+      note:      iNote  > -1 ? String(values[r][iNote]  || '') : ''
+    });
+  }
+  return out;
+}
+
+/** The sides as the sheet spells them, each once, in the order they appear. */
+function adminUniq_(list) {
+  var seen = {}, out = [];
+  for (var i = 0; i < list.length; i++) {
+    var v = String(list[i]).trim();
+    if (!v || seen[v]) continue;
+    seen[v] = true;
+    out.push(v);
+  }
+  return out;
+}
+
+/* ---------------------------------------------------------------- writing */
+
+function adminGuestSheet_() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(GUESTS_SHEET);
+  if (!sheet) throw new Error('No GUESTS tab. Run buildGuests() first.');
+  return sheet;
+}
+
+function adminSave_(g) {
+  adminGuestSheet_().getRange(g.row, 1, 1, GWIDTH).setValues([[
+    g.name, g.side, g.household || g.name,
+    g.table === UNSEATED ? '' : g.table,
+    parseInt(g.seats, 10) || 1,
+    g.status, g.replied || '', g.note || ''
+  ]]);
+}
+
+function adminAdd_(g) {
+  adminGuestSheet_().appendRow([
+    g.name, g.side || '', g.household || g.name,
+    g.table === UNSEATED ? '' : (g.table || ''),
+    parseInt(g.seats, 10) || 1,
+    g.status || 'No reply', '', ''
+  ]);
+}
+
+function adminRemove_(row) {
+  adminGuestSheet_().deleteRow(row);
+}
+
+/**
+ * Several guests at once. Rows are deleted from the bottom up, so removing
+ * one does not shift the next out from under us.
+ */
+function adminBulk_(rows, field, value) {
+  var sheet = adminGuestSheet_();
+  if (field === 'remove') {
+    rows.slice().sort(function (a, b) { return b - a; })
+      .forEach(function (r) { sheet.deleteRow(r); });
+    return;
+  }
+  var col = field === 'table'  ? GCOL.table
+          : field === 'status' ? GCOL.status
+          : field === 'side'   ? GCOL.side : 0;
+  if (!col) return;
+  var v = (field === 'table' && value === UNSEATED) ? '' : value;
+  rows.forEach(function (r) { sheet.getRange(r, col).setValue(v); });
+}
+
+function adminCapacity_(name, capacity) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(TABLES_SHEET);
+  if (!sheet) {
+    sheet = ss.insertSheet(TABLES_SHEET);
+    sheet.getRange(1, 1, 1, 2).setValues([['Table', 'Seats']]).setFontWeight('bold');
+    sheet.setFrozenRows(1);
+  }
+  var last = sheet.getLastRow();
+  var names = last > 1 ? sheet.getRange(2, 1, last - 1, 1).getValues() : [];
+  for (var i = 0; i < names.length; i++) {
+    if (String(names[i][0]).trim() === name) {
+      sheet.getRange(i + 2, 2).setValue(capacity);
+      return;
+    }
+  }
+  sheet.appendRow([name, capacity]);
+}
+
+function adminRename_(from, to) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = adminGuestSheet_();
+  var last = sheet.getLastRow();
+  if (last > 1) {
+    var col = sheet.getRange(2, GCOL.table, last - 1, 1);
+    var v = col.getValues();
+    for (var i = 0; i < v.length; i++) if (String(v[i][0]).trim() === from) v[i][0] = to;
+    col.setValues(v);
+  }
+  var t = ss.getSheetByName(TABLES_SHEET);
+  if (t && t.getLastRow() > 1) {
+    var tc = t.getRange(2, 1, t.getLastRow() - 1, 1);
+    var tv = tc.getValues();
+    for (var j = 0; j < tv.length; j++) if (String(tv[j][0]).trim() === from) tv[j][0] = to;
+    tc.setValues(tv);
+  }
 }

@@ -1,112 +1,126 @@
 # The guest list manager
 
-**Live since 19 October 2026.** Set up and working; this is the reference for
-how it is wired and how to change it.
+**chanelsonwedding.online/manage.html** — passcode, then the list. It is a page
+on your own site, in your own fonts and colours, not a Google page.
 
-To open it: **chanelsonwedding.online/#/rsvp** → *Manage the guest list* →
-passcode **123234** → *Open the guest list*. Google then checks it is you.
-
----
-
-## The two projects
-
-They are different things that happen to share a default filename, `Code.gs`.
-Telling them apart is the whole trick.
-
-|                      | **RSVP (website endpoint)**            | **Guest List Manager**             |
-| -------------------- | -------------------------------------- | ---------------------------------- |
-| Opens from           | the spreadsheet → Extensions → Apps Script | script.google.com → your list  |
-| Bound to the sheet?  | yes (uses `getActiveSpreadsheet`)      | no (uses `SHEET_ID` + `openById`)  |
-| `Code.gs` holds      | `rsvp-apps-script.gs`                  | `admin-apps-script.gs`             |
-| Also holds           | nothing                                | an HTML file named `ui`            |
-| Functions you'll see | `doPost`, `syncRoster`, `buildGuests`  | `getAll`, `saveGuest`, `addGuest`  |
-| Deployed to          | Anyone (guests must reach it)          | **Only myself** — never Anyone     |
-| Owned by             | Chanel (Nelson is an editor)           | Nelson                             |
-
-If the function dropdown shows the wrong names for the project you think you
-are in, stop — you have the wrong window open.
-
-The RSVP script **cannot** run as a standalone project: it calls
-`SpreadsheetApp.getActiveSpreadsheet()`, which returns null outside the sheet.
+Bookmark it. Nothing on the public site links to it, on purpose: there is no
+door for two hundred guests to notice and push on.
 
 ---
 
-## Where the passcode lives
+## How it fits together
 
-In `rsvp-apps-script.gs`, not in `index.html`:
-
-```js
-var ADMIN_CODE    = '123234';
-var ADMIN_APP_URL = '...';   // the manager's deployed web-app URL
+```
+manage.html            the screen. A static file on Hostinger, like the rest
+   │                   of the site. Holds no data and no passcode.
+   │  POST op=…
+   ▼
+RSVP Apps Script       the only thing that touches the sheet. Checks the
+   │                   passcode, hands out tokens, reads and writes GUESTS.
+   ▼
+Vicencio-Reyes Wedding Plan
+   GUESTS              one row per guest — the manager's own tab
+   TABLES              table sizes, made the first time one is set
+   GUEST LIST          the seating chart. Read only, never written
+   Website RSVP        replies as they arrive
 ```
 
-The website posts what was typed to the RSVP endpoint and gets the manager's
-address back only when it matches. Neither value is in the public page, and a
-wrong code waits a second and a half before saying no.
-
-**What this does and does not do.** It keeps the door off the page for two
-hundred guests. It is not the lock. The lock is that the manager is deployed
-**Only myself**, so Google refuses anyone who is not Nelson or Chanel even
-with the URL in hand.
+The same endpoint already receives your guests' RSVPs, so the manager adds no
+new moving parts — one script, one deployment, one sheet.
 
 ---
 
-## Changing things
+## The passcode
 
-**The passcode** — edit `ADMIN_CODE` in the RSVP project, then redeploy it
-(below). Nothing on the website changes.
+```js
+var ADMIN_CODE   = 'chanelson-132611';
+var SESSION_DAYS = 30;
+```
 
-**Redeploying either project** — Deploy → **Manage** deployments → pencil →
-Version: **New version** → Deploy. Never *New deployment*: that mints a
-different URL, and for the RSVP project that silently kills the live form.
+Both live near the top of `rsvp-apps-script.gs`, not in `manage.html` — that
+page is public and anyone can read it with Ctrl+U.
 
-The RSVP project has several deployments and the dialog does not preselect the
-live one. The live one is the deployment whose id matches `RSVP_ENDPOINT` in
-`index.html` — check before clicking the pencil.
+Typed once per device. The server then issues a 64-character token that the
+browser keeps for a month, and that token is what every later request carries.
+That is what lets the code be long without being a nuisance.
 
-**A saved edit does nothing on its own.** The live URL keeps serving the last
+**Changing it:** edit the line, redeploy (below). Everyone signed in anywhere
+is signed out by it. *Sign out* in the top right does the same for one device.
+
+**Wrong codes** wait a second and a half before answering, and eight inside a
+quarter of an hour stops the door answering at all. The count is shared,
+because the endpoint cannot tell who is asking — so a stranger hammering it
+locks you out too. A guest list is better unreachable for fifteen minutes than
+guessable in an afternoon.
+
+**What this protects.** The passcode is now the whole lock. Before, the manager
+was a Google page and Google's sign-in was the lock; moving the screen onto
+your own domain is what traded that away. Worth knowing rather than
+discovering: anyone with the passcode has the guest list.
+
+---
+
+## Redeploying
+
+Spreadsheet → Extensions → Apps Script → **Deploy → Manage deployments** →
+pencil → Version: **New version** → Deploy.
+
+Never *New deployment*: that mints a different URL, and the live form and the
+manager both stop working.
+
+**The dialog does not reliably preselect the live deployment.** There are
+several. The live one is the deployment whose id matches `RSVP_ENDPOINT` in
+`index.html` and `ENDPOINT` in `manage.html`. Check before clicking the pencil.
+
+**A saved edit does nothing on its own** — the URL keeps serving the last
 deployed version until you cut a new one.
-
-**Giving Chanel access** — in the Guest List Manager project, Share (top
-right) → add her Google account as Editor. Same URL, same passcode.
 
 ---
 
 ## Refreshing the data
 
-The manager reads a `GUESTS` tab, which `buildGuests()` in the RSVP project
-builds from the `GUEST LIST` seating chart. Run it again (function dropdown →
-`buildGuests` → Run) whenever the chart changes. It never writes to
-`GUEST LIST`, so the seating plan cannot be disturbed.
+`buildGuests()` fills the `GUESTS` tab from the `GUEST LIST` seating chart.
+Run it again (function dropdown → `buildGuests` → Run) whenever the chart
+changes. It never writes to `GUEST LIST`, so the seating plan is safe.
 
-Last run wrote 196 guests across 174 households: 77 coming, 119 awaiting
-reply.
+Last run: 196 guests, 174 households, 18 tables.
 
 ---
 
 ## If something breaks
 
-| What you see                                | What it means                                   |
-| ------------------------------------------- | ----------------------------------------------- |
-| "That passcode did not work."               | the RSVP project was edited but not redeployed  |
-| "The guest list manager is not set up yet." | `ADMIN_APP_URL` is empty                        |
-| "Could not reach the guest list just now."  | the RSVP endpoint is down                       |
-| The manager sits on "Loading…" forever      | a server-side error — see below                 |
+| What you see                               | What it means                                |
+| ------------------------------------------ | -------------------------------------------- |
+| "That passcode did not work."              | wrong code, or the script was not redeployed  |
+| "Too many tries. Wait N minutes."          | the lockout; it clears itself                 |
+| "That sign-in has expired."                | token older than 30 days, or the code changed |
+| "Could not reach the guest list."          | the endpoint is down — load it in a browser   |
+| The page sits on "Loading…"                | a server-side error — see below               |
 
-The manager's page cannot see server-side errors; its failure handler never
-fires for them. Look in the Guest List Manager project → the **Executions**
-icon in the left rail → expand the failed row. That is where
-`ReferenceError: uniq_ is not defined` turned up.
+A server-side error is invisible to the page; its failure handler never fires
+for one. Look in the Apps Script project → the **Executions** icon in the left
+rail → expand the failed row. That is where `ReferenceError: uniq_ is not
+defined` turned up.
 
 ---
 
 ## Pasting code into Apps Script
 
-Use a UTF-8-safe clipboard. On Windows, `clip.exe` reads its input as the ANSI
-codepage and turns every em-dash into `ΓÇö`, every `·` into mojibake, and —
-worse — corrupts the combining-diacritic range in `norm_()`, which is what
-makes "Peña" match "Pena". Use PowerShell instead:
+Use a UTF-8-safe clipboard. On Windows `clip.exe` reads its input as the ANSI
+codepage: every em-dash becomes `ΓÇö`, every `·` turns to mojibake, and — worse
+— it corrupts the combining-diacritic range in `norm_()`, which is what makes
+"Peña" match a guest typing "Pena". Use PowerShell:
 
 ```powershell
 Set-Clipboard -Value (Get-Content -Raw -Encoding UTF8 'path\to\file')
 ```
+
+---
+
+## Still lying around
+
+`admin-apps-script.gs` and `admin-ui.html` are the earlier Google-hosted
+version, and the **Guest List Manager** Apps Script project that serves them
+is still deployed. It works, and it is Google-locked, so it makes a fallback —
+but it is a second codepath writing the same sheet. Delete the project and
+those two files when you are happy with this one.
