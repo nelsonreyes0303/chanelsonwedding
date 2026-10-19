@@ -75,6 +75,12 @@ function doPost(e) {
   try {
     var p = (e && e.parameter) || {};
     if (p.op) return adminApi_(p);
+
+    /* The passcode box that used to sit on the RSVP page. A browser holding
+       a cached copy of it still posts here, and without this the reply below
+       would file its attempt as a blank RSVP. */
+    if (p.admin) return json_({ ok: false, error: 'moved' });
+
     var sheet = getSheet_();
     sheet.appendRow([
       Utilities.formatDate(new Date(), 'Asia/Manila', 'yyyy-MM-dd HH:mm:ss'),
