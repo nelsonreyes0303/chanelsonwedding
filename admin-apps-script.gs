@@ -154,6 +154,19 @@ function readReplies_(ss) {
   return out;
 }
 
+/** The sides as the sheet actually spells them, each one once, in the order
+ *  they first appear, so the filter offers exactly what is there. */
+function uniq_(list) {
+  var seen = {}, out = [];
+  for (var i = 0; i < list.length; i++) {
+    var v = String(list[i]).trim();
+    if (!v || seen[v]) continue;
+    seen[v] = true;
+    out.push(v);
+  }
+  return out;
+}
+
 /* ------------------------------------------------------------------- write */
 
 /** One guest, by the row they came from. */
