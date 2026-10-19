@@ -608,6 +608,9 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
   letter-spacing:.24em;text-transform:uppercase;color:rgba(247,241,231,.28);
   text-decoration:none;margin-top:14px;transition:color .3s;}
 .rsvp-admin:hover{color:var(--gold-light);}
+/* display:block above beats the hidden attribute on its own, and the link
+   would render pointing nowhere. */
+.rsvp-admin[hidden]{display:none;}
 
 /* ========================= PAGER ========================= */
 .pager{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:stretch;
