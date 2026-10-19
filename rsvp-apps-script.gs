@@ -20,6 +20,8 @@ var RSVP_SHEET  = 'Website RSVP';
 var GUEST_SHEET = 'GUEST LIST';
 var SEATS_SHEET = 'Plus Ones';   // name/seats column pairs, side by side
 var ROSTER_SHEET = 'CONFIRMED GUESTS';
+var GUESTS_SHEET = 'GUESTS';   // the single tab the admin app will own
+var GUESTS_COLUMNS = ['Name','Side','Household','Table','Seats','Status','Replied','Note'];
 var ROSTER_STATUS_COL = 2;   // column B, the one holding Pending
 
 var GUEST_NAMES = 'Who is coming';
@@ -426,6 +428,137 @@ function syncRoster() {
   Logger.log('Rebuilt ' + ROSTER_SHEET + ': ' + guests.length + ' guests across ' +
     order.length + ' tables. Answers carried over: ' + carried +
     '. The previous tab was copied aside.');
+}
+
+/* --------------------------------------------------------------- migration */
+
+/**
+ * Which side of the family a guest belongs to, taken from the Plus Ones tab,
+ * where each block of columns is headed by one host's name.
+ */
+function readSides_() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SEATS_SHEET);
+  if (!sheet || sheet.getLastRow() < 2) return {};
+
+  var values = sheet.getDataRange().getValues();
+  var header = values[0] || [];
+  var blocks = [];
+  for (var c = 0; c < header.length; c++) {
+    var h = tidy_(header[c]);
+    if (h && !/seat/i.test(h)) blocks.push({ col: c, side: h.replace(/\s*guests?$/i, '') });
+  }
+
+  var out = {};
+  for (var r = 1; r < values.length; r++) {
+    for (var i = 0; i < blocks.length; i++) {
+      var name = norm_(values[r][blocks[i].col]);
+      if (name) out[name] = blocks[i].side;
+    }
+  }
+  return out;
+}
+
+/** Each guest's answer so far, read from the roster. */
+function readStatuses_() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ROSTER_SHEET);
+  if (!sheet || sheet.getLastRow() < 1) return {};
+  var rows = sheet.getRange(1, 1, sheet.getLastRow(), ROSTER_STATUS_COL).getValues();
+  var out = {};
+  rows.forEach(function (r) {
+    var k = rosterName_(r[0]), v = tidy_(r[ROSTER_STATUS_COL - 1]);
+    if (k && v) out[k] = v;
+  });
+  return out;
+}
+
+/**
+ * The replies already collected, keyed by every person each one names.
+ * A reply is what tells us who belongs with whom, so it is also where the
+ * households come from — everyone on one reply shares its sender.
+ */
+function readReplies_() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(RSVP_SHEET);
+  if (!sheet || sheet.getLastRow() < 2) return {};
+  var values = sheet.getDataRange().getValues();
+  var head = values[0].map(function (h) { return tidy_(h).toLowerCase(); });
+  var iWhen = head.indexOf('received (manila)'),
+      iName = head.indexOf('name'),
+      iParty = head.indexOf(GUEST_NAMES.toLowerCase()),
+      iNote = head.indexOf('note');
+
+  var out = {};
+  for (var r = 1; r < values.length; r++) {
+    var sender = tidy_(values[r][iName]);
+    if (!sender) continue;
+    var party = iParty > -1 ? String(values[r][iParty]).split(',') : [];
+    if (!party.length) party = [sender];
+    party.forEach(function (p) {
+      var k = norm_(p);
+      if (!k) return;
+      out[k] = {
+        household: sender,
+        when: iWhen > -1 ? tidy_(values[r][iWhen]) : '',
+        note: (iNote > -1 && norm_(p) === norm_(sender)) ? tidy_(values[r][iNote]) : ''
+      };
+    });
+  }
+  return out;
+}
+
+/**
+ * Builds GUESTS from the seating chart, the Plus Ones tab and the roster,
+ * one row per person. Nothing is read from GUESTS itself and nothing else is
+ * touched, so this can be run, inspected, thrown away and run again.
+ *
+ * Households come from the replies where there are any, and otherwise from
+ * the Plus Ones tab, which names the person an invitation was addressed to.
+ * Everyone else stands alone until grouped in the app.
+ */
+function buildGuests() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var chart = readGuests_();
+  if (!chart.length) {
+    Logger.log('Read nothing from "' + GUEST_SHEET + '". Nothing was written.');
+    return;
+  }
+
+  var seats = readSeats_(), sides = readSides_(),
+      status = readStatuses_(), replies = readReplies_();
+
+  var rows = chart.map(function (g) {
+    var k = norm_(g.name), reply = replies[k];
+    return [
+      g.name,
+      sides[k] || '',
+      reply ? reply.household : (seats[k] ? g.name : g.name),
+      g.table,
+      seats[k] || 1,
+      status[k] || 'Pending',
+      reply ? reply.when : '',
+      reply ? reply.note : ''
+    ];
+  });
+
+  var sheet = ss.getSheetByName(GUESTS_SHEET);
+  if (sheet) {
+    sheet.copyTo(ss).setName(GUESTS_SHEET + ' before ' +
+      Utilities.formatDate(new Date(), 'Asia/Manila', 'MM-dd HH:mm'));
+    sheet.clear();
+  } else {
+    sheet = ss.insertSheet(GUESTS_SHEET);
+  }
+  sheet.getRange(1, 1, 1, GUESTS_COLUMNS.length).setValues([GUESTS_COLUMNS]).setFontWeight('bold');
+  sheet.setFrozenRows(1);
+  sheet.getRange(2, 1, rows.length, GUESTS_COLUMNS.length).setValues(rows);
+  sheet.setColumnWidth(1, 220).setColumnWidth(3, 200).setColumnWidth(8, 300);
+
+  var withSide = rows.filter(function (r) { return r[1]; }).length;
+  var answered = rows.filter(function (r) { return r[5].toLowerCase() !== 'pending'; }).length;
+  var grouped = rows.filter(function (r) { return norm_(r[2]) !== norm_(r[0]); }).length;
+  Logger.log('Wrote ' + rows.length + ' guests to "' + GUESTS_SHEET + '".');
+  Logger.log('  side known: ' + withSide + ' · already answered: ' + answered +
+             ' · grouped into another household: ' + grouped);
+  Logger.log('Nothing else was changed. The RSVP still reads the old tabs.');
 }
 
 /* -------------------------------------------------------------------- test */
