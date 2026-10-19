@@ -16,6 +16,19 @@
  * disturb the seating plan. Replies are appended to RSVP_SHEET instead.
  */
 
+/* The way in to the guest list manager.
+ *
+ *   ADMIN_CODE     what you type on the RSVP page.
+ *   ADMIN_APP_URL  the admin project's deployed web-app URL, handed back only
+ *                  when the code matches. Leave it empty until that project
+ *                  is deployed and the website will say so plainly.
+ *
+ * Both live here rather than in index.html, because index.html is a public
+ * file anyone can read with Ctrl+U and this script is not. Changing the code
+ * later means editing this line and redeploying — nothing on the website. */
+var ADMIN_CODE    = '123234';
+var ADMIN_APP_URL = '';
+
 var RSVP_SHEET  = 'Website RSVP';
 var GUEST_SHEET = 'GUEST LIST';
 var SEATS_SHEET = 'Plus Ones';   // name/seats column pairs, side by side
@@ -47,6 +60,7 @@ var SCAN_ROWS  = 25;      // how far down to hunt for that header row
 function doPost(e) {
   try {
     var p = (e && e.parameter) || {};
+    if (p.admin) return adminDoor_(p.code);
     var sheet = getSheet_();
     sheet.appendRow([
       Utilities.formatDate(new Date(), 'Asia/Manila', 'yyyy-MM-dd HH:mm:ss'),
@@ -71,6 +85,22 @@ function doPost(e) {
   } catch (err) {
     return json_({ ok: false, error: String(err) });
   }
+}
+
+/**
+ * Answers the passcode box on the RSVP page. A wrong code is told nothing
+ * beyond "no", and waits a second and a half first, which turns guessing at
+ * six digits from a few minutes of scripting into something nobody will sit
+ * through. The manager behind the link is still Google-locked to the two of
+ * you, so a lucky guess buys a URL and a sign-in refusal.
+ */
+function adminDoor_(code) {
+  if (String(code || '').trim() !== ADMIN_CODE) {
+    Utilities.sleep(1500);
+    return json_({ ok: false });
+  }
+  if (!ADMIN_APP_URL) return json_({ ok: false, error: 'no-url' });
+  return json_({ ok: true, url: ADMIN_APP_URL });
 }
 
 /**
