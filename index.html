@@ -604,6 +604,10 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
   text-transform:uppercase;color:rgba(247,241,231,.5);margin:24px 0 0;padding-top:20px;
   border-top:1px solid rgba(176,141,87,.2);}
 .rsvp-by strong{color:var(--gold-light);font-weight:400;}
+.rsvp-admin{display:block;text-align:center;font-family:var(--sans);font-size:8.5px;
+  letter-spacing:.24em;text-transform:uppercase;color:rgba(247,241,231,.28);
+  text-decoration:none;margin-top:14px;transition:color .3s;}
+.rsvp-admin:hover{color:var(--gold-light);}
 
 /* ========================= PAGER ========================= */
 .pager{display:grid;grid-template-columns:1fr auto 1fr;gap:8px;align-items:stretch;
@@ -1302,6 +1306,8 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
       </div>
       <p id="rsvp-msg" role="status" aria-live="polite"></p>
       <p class="rsvp-by">Responses go straight to <strong>Nelson &amp; Chanel</strong></p>
+      <!-- For the two of you. Google asks who you are; nobody else gets in. -->
+      <a class="rsvp-admin" id="admin-link" href="#" hidden>Manage the guest list</a>
     </form>
   </div>
 </section>
@@ -1353,6 +1359,12 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
    Leave both empty and the form politely says it is not accepting replies
    yet, so no one is fooled into thinking their RSVP went through.
    ========================================================================== */
+/* The guest list manager. Paste the deployed web-app URL from the admin
+   Apps Script project here; leave it empty and the link stays hidden.
+   It is not a secret: the app is deployed to your Google account only, so
+   anyone else who follows it is simply refused by Google. */
+var ADMIN_URL = '';
+
 var RSVP_ENDPOINT = 'https://script.google.com/macros/s/AKfycbx0clbe1F19T-CUARwcYGKH8eiDWLEMAnCBM_rtnlsQ5-rQTCvCs27zFAspOxegeMN1/exec';
 var RSVP_EMAIL    = '';
 
@@ -1693,6 +1705,16 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
       if (Math.abs(dx) > 46) lbShow(li + (dx < 0 ? 1 : -1));
       x0 = null;
     }, { passive: true });
+  })();
+
+  /* ------------------------------------------------------------ ADMIN LINK */
+  (function adminLink() {
+    var a = $("#admin-link");
+    if (!a || !ADMIN_URL) return;   // no URL set, so the link never appears
+    a.href = ADMIN_URL;
+    a.target = "_blank";
+    a.rel = "noopener";
+    a.hidden = false;
   })();
 
   /* -------------------------------------------------------------- RSVP FORM */
