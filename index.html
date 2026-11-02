@@ -404,12 +404,12 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
   text-transform:uppercase;color:var(--muted);margin-top:10px;}
 .ref-label{font-family:var(--sans);font-size:9px;letter-spacing:.3em;text-transform:uppercase;
   color:var(--muted);margin:38px 0 16px;text-align:center;}
-/* The strip is 3:2 and the portrait 3:4, so 2:1 of the width stands them
-   the same height without cropping either. */
+/* The strip is 1536:800 and the portrait 3:4, so 2.56:1 of the width stands
+   them the same height without cropping either. */
 .ref{display:flex;gap:clamp(10px,2.2vw,18px);justify-content:center;align-items:flex-start;
   max-width:720px;margin:0 auto;}
 .ref figure{margin:0;min-width:0;}
-.ref figure:first-child{flex:2 1 0;}
+.ref figure:first-child{flex:2.56 1 0;}
 .ref figure:last-child{flex:1 1 0;}
 .ref img{display:block;width:100%;height:auto;border:1px solid rgba(176,141,87,.32);}
 .ref figcaption{font-family:var(--sans);font-size:8px;letter-spacing:.26em;text-transform:uppercase;
@@ -1030,8 +1030,8 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
     <p class="ref-label">For reference</p>
     <div class="ref">
       <figure>
-        <img src="img/attire-ladies.jpg" width="1200" height="800" loading="lazy"
-             alt="Five long evening dresses in slate, pewter, clay, taupe and stone">
+        <img src="img/attire-ladies-2.jpg" width="1536" height="800" loading="lazy"
+             alt="Six long evening dresses in slate, pewter, brown, clay, taupe and stone">
         <figcaption>Ladies</figcaption>
       </figure>
       <figure>
