@@ -148,8 +148,30 @@ input,select{font-family:var(--sans);font-size:13px;padding:8px 10px;border:1px 
 .bar .out{background:none;border:0;color:#9E9683;font-family:var(--sans);font-size:9.5px;
   letter-spacing:.16em;text-transform:uppercase;cursor:pointer;padding:4px 2px}
 .bar .out:hover{color:var(--gold-lt)}
-@media(max-width:860px){ .floor{grid-template-columns:1fr} .plist{max-height:190px} }
-@media(max-width:700px){ .wrap{padding:13px 11px 60px} .tbl,.side{display:none} .members{padding-left:34px} }
+/* The checklist. One card per section, a row per thing to bring. */
+.cl{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
+.stats.cst{grid-template-columns:repeat(3,1fr)}
+.cls{background:var(--card);border:1px solid var(--line);border-radius:11px;overflow:hidden}
+.cls header{display:flex;align-items:baseline;gap:10px;padding:13px 15px 0}
+.cls h3{font-family:var(--serif);font-size:20px;font-weight:600;flex:1}
+.cls .cnt{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.cls .meter{margin:9px 15px 4px}
+.cls.all .cnt{color:var(--ok)} .cls.all .meter i{background:var(--ok)}
+.ci{display:flex;align-items:flex-start;gap:8px;padding:9px 11px 9px 15px;border-bottom:1px solid #F3EEE4}
+.ci:last-child{border-bottom:0}
+.ci label{display:flex;align-items:flex-start;gap:11px;flex:1;min-width:0;cursor:pointer;line-height:1.45}
+.ci .cb{width:18px;height:18px;margin-top:1px}
+.ci .it{font-size:13.5px}
+.ci.done .it{color:var(--muted);text-decoration:line-through;text-decoration-color:rgba(122,112,100,.55)}
+.ci .nt{display:block;font-size:11.5px;font-style:italic;color:#9A6B1E;margin-top:2px}
+.ci .ico{width:28px;height:28px}
+.cls .none{padding:12px 15px;font-size:12px;color:var(--ok);font-style:italic}
+.cls footer{padding:8px 15px 13px;border-top:1px solid #F3EEE4}
+.cls footer .btn{padding:6px 11px}
+@media(max-width:860px){ .floor{grid-template-columns:1fr} .plist{max-height:190px} .cl{grid-template-columns:1fr} }
+@media(max-width:700px){ .wrap{padding:13px 11px 60px} .tbl,.side{display:none} .members{padding-left:34px}
+  .stats.cst{gap:7px} .stats.cst .stat{padding:10px 11px} .stats.cst .stat b{font-size:23px}
+  .stats.cst .stat span{font-size:8.5px;letter-spacing:.12em} }
 </style></head><body>
 
 <div class="gate" id="gate">
@@ -173,6 +195,7 @@ input,select{font-family:var(--sans);font-size:13px;padding:8px 10px;border:1px 
   <button data-v="tables">Tables</button>
   <button data-v="replies">Replies</button>
   <button data-v="issues">Needs attention</button>
+  <button data-v="checklist">Checklist</button>
 </div>
 <div class="wrap" id="app"><div class="empty"><h3>Loading…</h3></div></div>
 <div class="modal hide" id="m"><div class="sheet" id="msheet"></div></div>
@@ -188,6 +211,12 @@ var U = 'Not yet seated';
 var ENDPOINT = 'https://script.google.com/macros/s/AKfycbx0clbe1F19T-CUARwcYGKH8eiDWLEMAnCBM_rtnlsQ5-rQTCvCs27zFAspOxegeMN1/exec';
 var TOKEN_KEY = 'cn-guestlist-token';
 var token = '';
+
+/* Marks this browser as one of yours, so the wedding site shows its button
+   for this page here and nowhere else. It opens nothing: the passcode and the
+   token still do that. It outlives Sign out on purpose, so the button stays
+   put for the next time. */
+var DEVICE_KEY = 'cn-admin-device';
 
 function post(op, payload){
   var body = new FormData();
@@ -215,7 +244,7 @@ function call(fn, args, done){
 function lockOut(why){
   token = '';
   try { localStorage.removeItem(TOKEN_KEY); } catch(e){}
-  D = null;
+  D = null; C = null; cErr = '';
   document.getElementById('gate').hidden = false;
   gmsg(why || '', !!why);
   document.getElementById('code').focus();
@@ -229,6 +258,7 @@ function letIn(data){
   document.getElementById('gate').hidden = true;
   gmsg('');
   document.getElementById('code').value = '';
+  try { localStorage.setItem(DEVICE_KEY, '1'); } catch(e){}
   D = data;
   render();
 }
@@ -250,6 +280,8 @@ function knock(){
     }
     gmsg(res && res.error === 'locked'
       ? 'Too many tries. Wait ' + (res.minutes || 15) + ' minutes.'
+      : res && res.error === 'unset'
+      ? 'No passcode is set up yet.'
       : 'That passcode did not work.', true);
     document.getElementById('code').value = '';
     document.getElementById('code').focus();
@@ -310,13 +342,18 @@ function seatedAt(t){ return D.guests.filter(function(g){return g.table===t}); }
 
 function render(){
   if(!D){ return; }
+  document.querySelectorAll('.nav button').forEach(function(b){ b.classList.toggle('on', b.dataset.v===view); });
+  if(view==='checklist'){
+    document.getElementById('app').innerHTML = viewChecklist();
+    bindChecklist();
+    return;
+  }
   if(!D.ready){
     document.getElementById('app').innerHTML =
       '<div class="empty"><h3>No GUESTS tab yet</h3><p>Run buildGuests() in the RSVP script project, ' +
       'then reload this page.</p></div>';
     return;
   }
-  document.querySelectorAll('.nav button').forEach(function(b){ b.classList.toggle('on', b.dataset.v===view); });
   var s = stats(), out =
     '<div class="stats">' +
     '<div class="stat g"><b>'+s.coming+'</b><span>Coming</span></div>' +
@@ -454,6 +491,161 @@ function viewIssues(){
     ' who have already said they are coming.</p></div>';
   return out || '<div class="warn good"><h4>Nothing needs attention</h4><p>Every name is matchable, ' +
     'everyone has a table, and no one is holding a seat they will not use.</p></div>';
+}
+
+/* -------------------------------------------------------------- checklist */
+/* Fetched the first time the tab opens rather than with the guest list. C is
+   the list as the sheet last sent it; each change sends one item and gets the
+   whole list back, the same way the guest list works. */
+var C = null, cBusy = false, cErr = '', cSeq = 0, cf = { q:'', show:'all' };
+
+function loadChecklist(){
+  if(cBusy) return;
+  cBusy = true;
+  var seq = ++cSeq;
+  post('getChecklist').then(function(res){ cBusy = false; took(res, seq, true); })
+    .catch(function(){ cBusy = false; cErr = 'offline'; render(); });
+}
+function checkCall(op, item){
+  var seq = ++cSeq;
+  post(op, [item]).then(function(res){ took(res, seq, false); }).catch(function(){
+    alert('Could not reach the checklist. Check your connection, then try again.');
+    C = null; render();
+  });
+}
+/* Ticks can go out faster than the answers come back. Only the answer to the
+   newest request is drawn, so a slow older one cannot untick something. */
+function took(res, seq, first){
+  if(res && res.ok){ if(seq===cSeq){ C = res.data.items; render(); } if(!first) flash(); return; }
+  if(res && res.error==='auth'){ lockOut('That sign-in has expired.'); return; }
+  if(res && res.error==='unknown request'){ cErr = 'old'; render(); return; }
+  if(first){ cErr = (res && res.error) || 'no answer'; render(); return; }
+  alert('Could not save: ' + ((res && res.error) || 'the checklist did not answer'));
+  C = null; render();
+}
+function itemAt(row){ return (C||[]).filter(function(c){return c.row===row})[0]; }
+
+/* Sections in the order the sheet first mentions them. */
+function sectionsOf(items){
+  var order = [], by = {};
+  items.forEach(function(c){
+    if(!by[c.section]){ by[c.section] = []; order.push(c.section); }
+    by[c.section].push(c);
+  });
+  return order.map(function(s){ return { name:s, items:by[s] }; });
+}
+
+function viewChecklist(){
+  if(cErr==='old') return '<div class="warn"><h4>The checklist needs the updated script</h4><p>Paste the new ' +
+    '<code>rsvp-apps-script.gs</code> into Apps Script and deploy a new version. ' +
+    '<code>SETUP-GUEST-LIST.md</code> has the steps.</p></div>';
+  if(cErr) return '<div class="warn bad"><h4>Could not load the checklist</h4><p>' +
+    esc(cErr==='offline' ? 'Check your connection, then try again.' : cErr) +
+    '</p><div style="margin-top:10px"><button class="btn ghost" id="cretry">Try again</button></div></div>';
+  if(!C){ loadChecklist(); return '<div class="empty"><h3>Loading the checklist&hellip;</h3></div>'; }
+
+  var done = C.filter(function(c){return c.done}).length, all = C.length;
+  var pct = all ? Math.round(done/all*100) : 0;
+  var out =
+    '<div class="stats cst">' +
+    '<div class="stat g"><b>'+done+'</b><span>Done</span></div>' +
+    '<div class="stat a"><b>'+(all-done)+'</b><span>Not yet done</span></div>' +
+    '<div class="stat"><b>'+pct+'%</b><span>Ready</span><div class="meter"><i style="width:'+pct+'%"></i></div></div>' +
+    '</div>' +
+    '<div class="tools"><input id="cq" type="search" placeholder="Search the checklist&hellip;" value="'+esc(cf.q)+'">' +
+    '<div class="seg" id="segcl">' + ['all|All','left|Not yet done','done|Done'].map(function(p){
+      var a = p.split('|');
+      return '<button data-show="'+a[0]+'"'+(cf.show===a[0]?' class="on"':'')+'>'+a[1]+'</button>'; }).join('') +
+    '</div><button class="btn" id="addc">+ Add item</button></div>';
+
+  var q = cf.q.trim().toLowerCase();
+  var cards = sectionsOf(C).map(function(s){
+    var n = s.items.length, d = s.items.filter(function(c){return c.done}).length;
+    var shown = s.items.filter(function(c){
+      if(cf.show==='left' && c.done) return false;
+      if(cf.show==='done' && !c.done) return false;
+      return !q || (c.item+' '+c.note).toLowerCase().indexOf(q) > -1;
+    });
+    if(q && !shown.length) return '';
+    return '<section class="cls'+(d===n?' all':'')+'"><header><h3>'+esc(s.name)+'</h3>' +
+      '<span class="cnt">'+(d===n ? 'All done' : d+' of '+n+' done')+'</span></header>' +
+      '<div class="meter"><i style="width:'+Math.round(d/n*100)+'%"></i></div>' +
+      (shown.length ? shown.map(function(c){
+        return '<div class="ci'+(c.done?' done':'')+'"><label>' +
+          '<input type="checkbox" class="cb" data-row="'+c.row+'"'+(c.done?' checked':'')+'>' +
+          '<span><span class="it">'+esc(c.item)+'</span>'+(c.note?'<span class="nt">'+esc(c.note)+'</span>':'')+'</span>' +
+          '</label><button class="ico cedit" data-row="'+c.row+'" aria-label="Edit">&#9998;</button></div>';
+      }).join('') : '<p class="none">'+(cf.show==='done' ? 'Nothing ticked off here yet.' : 'Everything here is done.')+'</p>') +
+      '<footer><button class="btn ghost cadd" data-s="'+esc(s.name)+'">+ Add to '+esc(s.name)+'</button></footer>' +
+      '</section>';
+  }).join('');
+  return out + (cards ? '<div class="cl">'+cards+'</div>'
+    : '<div class="empty"><h3>Nothing matches</h3><p>Try a different word.</p></div>');
+}
+
+function bindChecklist(){
+  var q = document.getElementById('cq');
+  if(q) q.oninput = function(){ cf.q = q.value; var p = q.selectionStart; render();
+    var n = document.getElementById('cq'); if(n){ n.focus(); n.setSelectionRange(p,p); } };
+  var sg = document.getElementById('segcl');
+  if(sg) sg.querySelectorAll('button').forEach(function(b){ b.onclick = function(){ cf.show = b.dataset.show; render(); }; });
+  document.querySelectorAll('.ci .cb').forEach(function(cb){
+    cb.onchange = function(){
+      var c = itemAt(+cb.dataset.row);
+      if(!c){ render(); return; }
+      var o = { row:c.row, section:c.section, item:c.item, note:c.note, done:cb.checked,
+                wasSection:c.section, wasItem:c.item };
+      c.done = cb.checked; render();
+      checkCall('saveCheck', o);
+    };
+  });
+  document.querySelectorAll('.cedit').forEach(function(b){ b.onclick = function(){ editCheck(+b.dataset.row); }; });
+  document.querySelectorAll('.cadd').forEach(function(b){ b.onclick = function(){ editCheck(null, b.dataset.s); }; });
+  var ad = document.getElementById('addc'); if(ad) ad.onclick = function(){ editCheck(null); };
+  var rt = document.getElementById('cretry'); if(rt) rt.onclick = function(){ cErr = ''; C = null; render(); };
+}
+
+function editCheck(row, section){
+  var c = row ? itemAt(row) : null;
+  var secs = sectionsOf(C || []).map(function(s){ return s.name; });
+  var cur = c ? c.section : (section || secs[0] || '');
+  show('<h3>'+(c ? 'Edit item' : 'New item')+'</h3><p class="hint">'+(c ? esc(c.section) : 'Added to the checklist')+'</p>' +
+    '<div class="f"><label>Item</label><input id="c-i" value="'+esc(c ? c.item : '')+'"></div>' +
+    '<div class="two"><div class="f"><label>Section</label><input id="c-s" list="c-secs" value="'+esc(cur)+'">' +
+      '<datalist id="c-secs">'+secs.map(function(s){ return '<option value="'+esc(s)+'">'; }).join('')+'</datalist></div>' +
+    '<div class="f"><label>Status</label><select id="c-d"><option value="">Not yet done</option>' +
+      '<option value="1"'+(c && c.done ? ' selected' : '')+'>Done (OK)</option></select></div></div>' +
+    '<div class="f"><label>Note</label><input id="c-n" value="'+esc(c ? c.note : '')+'" placeholder="Who has it, cost, delivery&hellip;"></div>' +
+    '<div class="acts"><button class="btn ghost" onclick="shut()">Cancel</button>' +
+    (c ? '<button class="btn ghost" style="color:var(--burgundy)" onclick="delCheck('+c.row+')">Remove</button>' : '') +
+    '<button class="btn" onclick="saveCheck('+(c ? c.row : 'null')+')">Save</button></div>');
+  if(!c) document.getElementById('c-i').focus();
+}
+function saveCheck(row){
+  var c = row ? itemAt(row) : null;
+  var o = {
+    row: row,
+    section: document.getElementById('c-s').value.trim() || 'Other',
+    item: document.getElementById('c-i').value.trim(),
+    done: !!document.getElementById('c-d').value,
+    note: document.getElementById('c-n').value.trim()
+  };
+  if(!o.item){ alert('The item needs a name.'); return; }
+  shut();
+  if(!c){ checkCall('addCheck', o); return; }
+  o.wasSection = c.section; o.wasItem = c.item;
+  c.section = o.section; c.item = o.item; c.done = o.done; c.note = o.note;
+  render();
+  checkCall('saveCheck', o);
+}
+function delCheck(row){
+  var c = itemAt(row);
+  if(!c){ shut(); return; }
+  if(!confirm('Remove “'+c.item+'” from the checklist?')) return;
+  shut();
+  C = C.filter(function(x){ return x !== c; });
+  render();
+  checkCall('removeCheck', { row:c.row, wasSection:c.section, wasItem:c.item });
 }
 
 /* ---------------------------------------------------------------- binding */
@@ -643,8 +835,19 @@ function copyWaiting(){
   document.body.removeChild(ta);
 }
 
+/* The tab is kept in the address, so manage.html#checklist opens straight
+   onto the checklist and a reload stays where it was. It is remembered on
+   this device too, so coming back from the wedding site's button lands on
+   whichever tab was in use last. */
+var VIEWS = ['guests','tables','replies','issues','checklist'];
+var VIEW_KEY = 'cn-admin-view';
 document.querySelectorAll('.nav button').forEach(function(b){
-  b.onclick = function(){ view = b.dataset.v; pick = null; render(); };
+  b.onclick = function(){
+    view = b.dataset.v; pick = null;
+    try { history.replaceState(null, '', view === 'guests' ? location.pathname : '#' + view); } catch(e){}
+    try { localStorage.setItem(VIEW_KEY, view); } catch(e){}
+    render();
+  };
 });
 document.getElementById('m').onclick = function(e){ if(e.target.id==='m') shut(); };
 document.getElementById('go').onclick = knock;
@@ -656,6 +859,13 @@ document.getElementById('out').onclick = function(){ lockOut(''); };
 /* A token from last time means straight in. Anything wrong with it and the
    first request answers 'auth', which puts the passcode screen back up. */
 (function start(){
+  var asked = location.hash.replace('#', ''), last = '';
+  try { last = localStorage.getItem(VIEW_KEY) || ''; } catch(e){}
+  if (VIEWS.indexOf(asked) > -1) view = asked;
+  else if (VIEWS.indexOf(last) > -1) view = last;
+  /* On a phone the tab row scrolls sideways; bring the open tab into sight. */
+  var tab = document.querySelector('.nav button[data-v="' + view + '"]');
+  if (tab && tab.parentNode.scrollTo) tab.parentNode.scrollTo({ left: Math.max(0, tab.offsetLeft - 20) });
   var saved = '';
   try { saved = localStorage.getItem(TOKEN_KEY) || ''; } catch(e){}
   if (!saved){ lockOut(''); return; }
