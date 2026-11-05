@@ -18,14 +18,19 @@
 
 /* The way in to the guest list manager at chanelsonwedding.online/manage.html.
  *
- * The code lives here, not in manage.html, because that page is public and
- * this script is not. Changing it means editing this line and redeploying;
- * nothing on the website moves. Everyone signed in is signed out by it.
+ * The passcode is not written in this file. The repository this file lives in
+ * is public, so anything here can be read by anyone. It is kept in this Apps
+ * Script project's Script Properties instead, under ADMIN_CODE_KEY (Project
+ * Settings -> Script Properties). Until it is set, the door stays shut.
+ *
+ * Changing it there signs everyone out at once, on every device, with no
+ * redeploy: each sign-in is stamped with the passcode it was made under, and
+ * a stamp that no longer matches is refused.
  *
  * It is typed once per device and then traded for a token that lasts a month,
  * which is what lets it be long enough to be worth having. */
-var ADMIN_CODE  = 'chanelson-132611';
-var SESSION_DAYS = 30;
+var ADMIN_CODE_KEY = 'ADMIN_CODE';
+var SESSION_DAYS   = 30;
 
 /* Wrong codes are counted across everybody, because the endpoint cannot tell
  * who is asking. Eight inside a quarter of an hour and it stops answering.
@@ -681,6 +686,11 @@ function adminApi_(p) {
       case 'bulk':        return adminWrite_(function () { adminBulk_(args[0], args[1], args[2]); });
       case 'setCapacity': return adminWrite_(function () { adminCapacity_(args[0], args[1]); });
       case 'renameTable': return adminWrite_(function () { adminRename_(args[0], args[1]); });
+
+      case 'getChecklist': return checkWrite_(function () {});
+      case 'saveCheck':    return checkWrite_(function () { checkSave_(args[0]); });
+      case 'addCheck':     return checkWrite_(function () { checkAdd_(args[0]); });
+      case 'removeCheck':  return checkWrite_(function () { checkRemove_(args[0]); });
     }
     return json_({ ok: false, error: 'unknown request' });
   } catch (err) {
@@ -710,6 +720,8 @@ function adminWrite_(fn) {
 function adminLogin_(code) {
   var props = PropertiesService.getScriptProperties();
   var now   = Date.now();
+  var want  = adminCode_();
+  if (!want) return json_({ ok: false, error: 'unset' });
 
   var tries = Number(props.getProperty('admin_tries') || 0);
   var since = Number(props.getProperty('admin_since') || 0);
@@ -722,7 +734,7 @@ function adminLogin_(code) {
     });
   }
 
-  if (String(code || '').trim() !== ADMIN_CODE) {
+  if (String(code || '').trim() !== want) {
     Utilities.sleep(1500);
     props.setProperty('admin_tries', String(tries + 1));
     props.setProperty('admin_since', String(since));
@@ -734,25 +746,45 @@ function adminLogin_(code) {
   adminSweep_(props, now);
 
   var token = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
-  props.setProperty('tok_' + token, String(now + SESSION_DAYS * 86400000));
+  props.setProperty('tok_' + token, (now + SESSION_DAYS * 86400000) + ':' + adminStamp_(want));
   return json_({ ok: true, token: token, data: adminAll_() });
 }
 
+/* A token is good until its month is up, and only while the passcode it was
+   issued under is still the passcode. Tokens from before the stamp existed
+   carry none, so they fail too and their devices are asked once more. */
 function adminValid_(token) {
   var t = String(token || '').trim();
   if (!/^[0-9a-f]{64}$/.test(t)) return false;
   var props = PropertiesService.getScriptProperties();
-  var until = Number(props.getProperty('tok_' + t) || 0);
+  var held  = String(props.getProperty('tok_' + t) || '').split(':');
+  var until = Number(held[0] || 0);
   if (!until) return false;
-  if (Date.now() > until) { props.deleteProperty('tok_' + t); return false; }
+  var want = adminCode_();
+  if (Date.now() > until || !want || held[1] !== adminStamp_(want)) {
+    props.deleteProperty('tok_' + t);
+    return false;
+  }
   return true;
+}
+
+function adminCode_() {
+  return String(PropertiesService.getScriptProperties().getProperty(ADMIN_CODE_KEY) || '').trim();
+}
+
+/** A short fingerprint of a passcode, so a token can say which one it was
+ *  issued under without the passcode being copied next to it. */
+function adminStamp_(code) {
+  var bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,
+                                      'chanelson-admin|' + code, Utilities.Charset.UTF_8);
+  return bytes.slice(0, 8).map(function (b) { return ('0' + (b & 255).toString(16)).slice(-2); }).join('');
 }
 
 /** Expired tokens would otherwise pile up in the script's properties. */
 function adminSweep_(props, now) {
   var all = props.getProperties();
   Object.keys(all).forEach(function (k) {
-    if (k.indexOf('tok_') === 0 && Number(all[k]) < now) props.deleteProperty(k);
+    if (k.indexOf('tok_') === 0 && Number(String(all[k]).split(':')[0]) < now) props.deleteProperty(k);
   });
 }
 
@@ -951,4 +983,204 @@ function adminRename_(from, to) {
     for (var j = 0; j < tv.length; j++) if (String(tv[j][0]).trim() === from) tv[j][0] = to;
     tc.setValues(tv);
   }
+}
+
+/* ===========================================================================
+   THE CHECKLIST
+
+   The Checklist tab of manage.html. It reads and writes a CHECKLIST tab with
+   one row per thing to bring or arrange:
+
+     Section | Item | Status | Note
+
+   Status is OK when it is done and blank when it is not, the same two answers
+   the coordinator's Big Day Ezzentials sheet asks for. The tab is made, and
+   filled from CHECK_SEED, the first time the manager asks for it, so there is
+   nothing to run by hand. After that the sheet is the list: edit it here or on
+   the website, and either one shows the other's changes.
+
+   It sits behind the same passcode and tokens as the guest list. Nothing on
+   it is in manage.html, which anyone can read.
+   ======================================================================== */
+
+var CHECK_SHEET   = 'CHECKLIST';
+var CHECK_COLUMNS = ['Section', 'Item', 'Status', 'Note'];
+
+/* From the coordinator's Big Day Ezzentials sheet. The bride's and groom's
+   lists are the things to bring for the pictorial. */
+var CHECK_SEED = [
+  ['Bride', 'Robe / dress for make-up (bring a back-up too)', '', ''],
+  ['Bride', 'Gown', '', ''],
+  ['Bride', 'Mannequin', '', 'C/O HZL OTD - P600'],
+  ['Bride', 'Shoes', '', ''],
+  ['Bride', 'Accessories', '', ''],
+  ['Bride', 'Perfume', '', ''],
+  ['Bride', 'Handkerchief', '', ''],
+  ['Bride', 'Invitation (2 copies)', '', ''],
+  ['Bride', 'Missalette', '', ''],
+  ['Bride', 'Copy of wedding vow', '', ''],
+  ['Bride', 'Exchange gift (for groom) / note', '', ''],
+  ['Bride', 'Portable handheld fan', '', ''],
+  ['Bride', 'Ento tokens: female (?)', '', ''],
+
+  ['Groom', 'Shorts / shirt (preps attire)', '', ''],
+  ['Groom', 'Suit / tie / inner shirt / pants', '', ''],
+  ['Groom', 'Socks / shoes', '', ''],
+  ['Groom', 'Handkerchief', '', ''],
+  ['Groom', 'Perfume', '', ''],
+  ['Groom', 'Watch', '', ''],
+  ['Groom', 'Belt / cufflinks or studs', '', ''],
+  ['Groom', 'Mobile phone / shades / laptop / guitar / wallet (optional)', '', ''],
+  ['Groom', 'Invitation (2 copies)', '', ''],
+  ['Groom', 'Missalette', '', ''],
+  ['Groom', 'Exchange gift (for bride) / note', '', ''],
+  ['Groom', 'Copy of wedding vow', '', ''],
+  ['Groom', 'Portable handheld fan', '', ''],
+  ['Groom', 'Ento tokens: male (?)', '', ''],
+
+  ['Church', 'Missalettes (10)', '', ''],
+  ['Church', '2 pillows', '', ''],
+  ['Church', 'Rings / engagement ring', '', ''],
+  ['Church', 'Arrhae', '', ''],
+  ['Church', 'Veil / secondary veil', '', ''],
+  ['Church', 'Cord', '', ''],
+  ['Church', 'Garter', '', ''],
+  ['Church', '2 matches', '', ''],
+  ['Church', 'Bible / rosary (optional)', '', ''],
+  ['Church', 'Pouch bag (optional, for monetary gifts)', '', ''],
+  ['Church', 'Offertory gifts: candles (2), goods', '', ''],
+  ['Church', 'Offertory gifts: wine, host (c/o church)', 'OK', ''],
+  ['Church', 'Neckties / bow ties', '', ''],
+  ['Church', 'Extra shoes, sandals or slippers', '', ''],
+  ['Church', 'Mint candies (Tic Tac mini packs or 6-packs, to share with VIPs / ento)', '', ''],
+  ['Church', 'Facial tissue (to share with VIPs / ento)', '', ''],
+  ['Church', 'Flowers', '', 'For delivery'],
+  ['Church', 'Bottled water', '', ''],
+  ['Church', 'Cupcakes for kids (optional)', '', ''],
+
+  ['Reception', 'USBs (program songs) / playlist (cocktails etc.)', '', ''],
+  ['Reception', 'USB: monogram (animated / static) / hashtag', '', ''],
+  ['Reception', 'VIP tokens: female (?)', '', ''],
+  ['Reception', 'VIP tokens: male (?)', '', ''],
+  ['Reception', 'VIP tokens: proxy (?)', '', ''],
+  ['Reception', 'Souvenirs: 180 Katinko, less VIPs, less kids (1:1)', '', ''],
+  ['Reception', 'Game props: raffle stubs', '', ''],
+  ['Reception', 'Prizes: Name That Tune (?) / Bring Me game (?)', '', ''],
+  ['Reception', 'Raffle items (stand fan / overnight stay / ?)', '', ''],
+  ['Reception', 'Extra envelopes (for monetary gifts)', '', ''],
+  ['Reception', 'Alcohol pump (for registration table)', '', ''],
+  ['Reception', 'QR code per table', '', ''],
+  ['Reception', 'QR code (for registration table)', '', ''],
+  ['Reception', 'Wines per table (with specific listing)', '', ''],
+  ['Reception', 'Wines for VIP tables', '', ''],
+  ['Reception', 'Hard drinks (with specific listing)', '', ''],
+  ['Reception', 'Extra string pouch (for monetary gifts)', '', ''],
+  ['Reception', 'Menu cards', '', ''],
+  ['Reception', 'Lechon (2)', '', '']
+];
+
+/** Same shape as adminWrite_, but hands back the checklist. Reads go through
+ *  it too, because the very first read is the one that makes the tab. */
+function checkWrite_(fn) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    fn();
+    return json_({ ok: true, data: checkAll_() });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function checkSheet_() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(CHECK_SHEET);
+  if (sheet) return sheet;
+  sheet = ss.insertSheet(CHECK_SHEET);
+  sheet.getRange(1, 1, 1, CHECK_COLUMNS.length).setValues([CHECK_COLUMNS]).setFontWeight('bold');
+  sheet.setFrozenRows(1);
+  sheet.getRange(2, 1, CHECK_SEED.length, CHECK_COLUMNS.length).setValues(CHECK_SEED);
+  sheet.setColumnWidth(1, 110);
+  sheet.setColumnWidth(2, 460);
+  sheet.setColumnWidth(3, 80);
+  sheet.setColumnWidth(4, 260);
+  return sheet;
+}
+
+function checkAll_() {
+  var sheet = checkSheet_();
+  var last = sheet.getLastRow();
+  if (last < 2) return { items: [] };
+  var rows = sheet.getRange(2, 1, last - 1, CHECK_COLUMNS.length).getValues();
+  var items = [];
+  for (var i = 0; i < rows.length; i++) {
+    var item = tidy_(rows[i][1]);
+    if (!item) continue;
+    items.push({
+      row: i + 2,
+      section: tidy_(rows[i][0]) || 'Other',
+      item: item,
+      done: checkDone_(rows[i][2]),
+      note: tidy_(rows[i][3])
+    });
+  }
+  return { items: items };
+}
+
+/** OK, however the sheet happens to say it, including a ticked checkbox. */
+function checkDone_(v) {
+  var s = String(v == null ? '' : v).trim().toLowerCase();
+  return s === 'ok' || s === 'done' || s === 'yes' || s === 'true' || s === 'x' || s === '✓' || s === '✔';
+}
+
+function checkRow_(c) {
+  var item = clean_(c && c.item);
+  if (!item) throw new Error('An item needs a name.');
+  return [clean_(c.section) || 'Other', item, c.done ? 'OK' : '', clean_(c.note)];
+}
+
+/**
+ * The row the page saw, if it still holds what the page saw. A row deleted on
+ * another device moves everything under it up one, and without this the next
+ * tick would land on the wrong item. Failing that, the same item wherever it
+ * went; failing that, nothing is written.
+ */
+function checkFind_(sheet, c) {
+  var last = sheet.getLastRow();
+  var rows = last > 1 ? sheet.getRange(2, 1, last - 1, 2).getValues() : [];
+  var ws = tidy_(c.wasSection), wi = tidy_(c.wasItem);
+  function same(r) { return tidy_(r[0]) === ws && tidy_(r[1]) === wi; }
+  var at = parseInt(c.row, 10) - 2;
+  if (at >= 0 && at < rows.length && same(rows[at])) return at + 2;
+  for (var i = 0; i < rows.length; i++) if (same(rows[i])) return i + 2;
+  throw new Error('That item was changed on another device. The list has been reloaded.');
+}
+
+function checkSave_(c) {
+  var sheet = checkSheet_();
+  var row = checkRow_(c);
+  sheet.getRange(checkFind_(sheet, c), 1, 1, CHECK_COLUMNS.length).setValues([row]);
+}
+
+/** A new item goes in after the last one in its section, so the sheet stays
+ *  grouped the way it reads on the website. */
+function checkAdd_(c) {
+  var sheet = checkSheet_();
+  var row = checkRow_(c);
+  var last = sheet.getLastRow(), after = 0;
+  if (last > 1) {
+    var secs = sheet.getRange(2, 1, last - 1, 1).getValues();
+    for (var i = 0; i < secs.length; i++) if (tidy_(secs[i][0]) === row[0]) after = i + 2;
+  }
+  if (after && after < last) {
+    sheet.insertRowAfter(after);
+    sheet.getRange(after + 1, 1, 1, CHECK_COLUMNS.length).setValues([row]);
+  } else {
+    sheet.appendRow(row);
+  }
+}
+
+function checkRemove_(c) {
+  var sheet = checkSheet_();
+  sheet.deleteRow(checkFind_(sheet, c));
 }

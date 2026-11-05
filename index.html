@@ -305,6 +305,16 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
 .home-tag{text-align:center;font-family:var(--sans);font-size:8.5px;letter-spacing:.3em;
   text-transform:uppercase;color:rgba(205,174,124,.8);margin:0;opacity:0;
   animation:fadeIn 1s ease 1.9s forwards;}
+/* The way into manage.html, under the menu. Its script unhides it only where
+   the manager has been signed into, and an author display rule outranks the
+   browser's own [hidden] rule, so that has to be said again here. */
+.home-admin{display:block;width:max-content;margin:-4px auto 0;padding:10px 18px;
+  border:1px solid rgba(205,174,124,.45);background:rgba(16,30,23,.45);
+  font-family:var(--sans);font-size:8.5px;letter-spacing:.24em;text-transform:uppercase;
+  color:var(--gold-light);text-decoration:none;opacity:0;
+  animation:fadeIn 1s ease 1.7s forwards;transition:background .3s ease;}
+.home-admin:hover{background:rgba(176,141,87,.2);}
+.home-admin[hidden]{display:none;}
 .home-hint{position:absolute;left:50%;bottom:calc(var(--pad-b) + 6px);z-index:3;
   font-family:var(--sans);font-size:8px;letter-spacing:.3em;text-transform:uppercase;
   color:rgba(247,241,231,.5);animation:bob 2.8s ease-in-out infinite;margin:0;}
@@ -662,7 +672,7 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
     animation-iteration-count:1!important;
     transition-duration:.001s!important;transition-delay:0s!important;}
   .view.active [data-stagger]>*,.view.active .vhead>*,.mcard,.home-pre,.home-names,
-  .home-date,.cd,.home-tag,.tabpanel.on>*,.gift p span{opacity:1!important;}
+  .home-date,.cd,.home-tag,.home-admin,.tabpanel.on>*,.gift p span{opacity:1!important;}
   .rule{width:64px;}
   .sw i{transform:none;opacity:1;}
   .ico [data-len]{stroke-dashoffset:0!important;}
@@ -820,6 +830,10 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
         <b>Rsvp</b>
       </a>
     </nav>
+
+    <!-- For the two of you. Shown only in a browser that has signed in to the
+         manager before, so guests never see a door to try. -->
+    <a class="home-admin tap" id="home-admin" href="manage.html" hidden>Guest list &amp; checklist</a>
 
   </div>
 </section>
@@ -1959,6 +1973,22 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
 
       say('Our RSVP form is not accepting replies just yet — please check back soon.', true);
     });
+  })();
+
+  /* ----------------------------------------------------------- ADMIN LINK */
+  /* The button to manage.html. manage.html marks a browser the first time it
+     is signed into, and only a marked browser shows the button, so guests
+     never see it. It carries nothing secret: the manager still asks for the
+     passcode on any browser without a good sign-in. */
+  (function adminLink() {
+    var a = document.getElementById("home-admin");
+    if (!a) return;
+    var mine = false;
+    try {
+      mine = localStorage.getItem("cn-admin-device") === "1" ||
+             !!localStorage.getItem("cn-guestlist-token");
+    } catch (e) {}
+    if (mine) a.hidden = false;
   })();
 
   /* ---------------------------------------------------------------- START */
