@@ -305,16 +305,23 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
 .home-tag{text-align:center;font-family:var(--sans);font-size:8.5px;letter-spacing:.3em;
   text-transform:uppercase;color:rgba(205,174,124,.8);margin:0;opacity:0;
   animation:fadeIn 1s ease 1.9s forwards;}
-/* The way into manage.html, under the menu. Its script unhides it only where
-   the manager has been signed into, and an author display rule outranks the
-   browser's own [hidden] rule, so that has to be said again here. */
-.home-admin{display:block;width:max-content;margin:-4px auto 0;padding:10px 18px;
-  border:1px solid rgba(205,174,124,.45);background:rgba(16,30,23,.45);
-  font-family:var(--sans);font-size:8.5px;letter-spacing:.24em;text-transform:uppercase;
-  color:var(--gold-light);text-decoration:none;opacity:0;
-  animation:fadeIn 1s ease 1.7s forwards;transition:background .3s ease;}
-.home-admin:hover{background:rgba(176,141,87,.2);}
+/* The way into manage.html, small in the bottom right corner of the home
+   screen. Its script unhides it only where the manager has been signed into,
+   and an author display rule outranks the browser's own [hidden] rule, so
+   that has to be said again here. */
+.home-admin{position:absolute;z-index:3;right:calc(env(safe-area-inset-right,0px) + 14px);
+  bottom:calc(var(--pad-b) + 12px);padding:6px 10px;
+  border:1px solid rgba(205,174,124,.35);background:rgba(16,30,23,.4);
+  font-family:var(--sans);font-size:7.5px;letter-spacing:.2em;text-transform:uppercase;
+  color:rgba(205,174,124,.85);text-decoration:none;opacity:0;
+  animation:fadeIn 1s ease 1.7s forwards;transition:background .3s ease,color .3s ease;}
+/* Small to look at, but a fingertip-sized target on a phone. */
+.home-admin::before{content:'';position:absolute;inset:-10px;}
+.home-admin:hover{background:rgba(176,141,87,.2);color:var(--gold-light);}
 .home-admin[hidden]{display:none;}
+/* Where it shows, the menu keeps clear of it. On a small phone the tiles
+   reach the bottom of the screen and would otherwise sit under the corner. */
+#v-home.has-admin .home-in{padding-bottom:calc(var(--pad-b) + 52px);}
 .home-hint{position:absolute;left:50%;bottom:calc(var(--pad-b) + 6px);z-index:3;
   font-family:var(--sans);font-size:8px;letter-spacing:.3em;text-transform:uppercase;
   color:rgba(247,241,231,.5);animation:bob 2.8s ease-in-out infinite;margin:0;}
@@ -831,11 +838,11 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer;}
       </a>
     </nav>
 
-    <!-- For the two of you. Shown only in a browser that has signed in to the
-         manager before, so guests never see a door to try. -->
-    <a class="home-admin tap" id="home-admin" href="manage.html" hidden>Guest list &amp; checklist</a>
-
   </div>
+
+  <!-- For the two of you. Shown only in a browser that has signed in to the
+       manager before, so guests never see a door to try. -->
+  <a class="home-admin tap" id="home-admin" href="manage.html" hidden>Admin login</a>
 </section>
 
 <!-- ==================== OUR STORY ==================== -->
@@ -1988,7 +1995,9 @@ var CEREMONY = '2026-12-06T14:00:00+08:00';
       mine = localStorage.getItem("cn-admin-device") === "1" ||
              !!localStorage.getItem("cn-guestlist-token");
     } catch (e) {}
-    if (mine) a.hidden = false;
+    if (!mine) return;
+    a.hidden = false;
+    document.getElementById("v-home").classList.add("has-admin");
   })();
 
   /* ---------------------------------------------------------------- START */
