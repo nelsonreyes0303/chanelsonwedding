@@ -408,8 +408,11 @@ function json_(obj) {
  *
  * Answers already given are carried across by name, and a name appearing more
  * than once keeps its answers in order, so three rows of one placeholder stay
- * three distinct rows rather than collapsing into one. The old tab is copied
- * aside first, because this rewrites the sheet rather than editing it.
+ * three distinct rows rather than collapsing into one.
+ *
+ * The tab is rewritten in place. It used to be copied aside first, as
+ * "CONFIRMED GUESTS before <date>", and those copies piled up as tabs nobody
+ * read. The way back from a bad run is File -> Version history instead.
  */
 function syncRoster() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -429,9 +432,6 @@ function syncRoster() {
         if (!k || !v) return;
         (answers[k] = answers[k] || []).push(v);
       });
-    sheet.copyTo(ss).setName(
-      ROSTER_SHEET + ' before ' +
-      Utilities.formatDate(new Date(), 'Asia/Manila', 'MM-dd HH:mm'));
   } else if (!sheet) {
     sheet = ss.insertSheet(ROSTER_SHEET);
   }
@@ -466,7 +466,7 @@ function syncRoster() {
 
   Logger.log('Rebuilt ' + ROSTER_SHEET + ': ' + guests.length + ' guests across ' +
     order.length + ' tables. Answers carried over: ' + carried +
-    '. The previous tab was copied aside.');
+    '. To undo, use File -> Version history.');
 }
 
 /* --------------------------------------------------------------- migration */
@@ -552,6 +552,9 @@ function readReplies_() {
  * Households come from the replies where there are any, and otherwise from
  * the Plus Ones tab, which names the person an invitation was addressed to.
  * Everyone else stands alone until grouped in the app.
+ *
+ * GUESTS is rewritten in place, with no "GUESTS before <date>" copy left
+ * beside it; File -> Version history is the way back.
  */
 function buildGuests() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -579,13 +582,8 @@ function buildGuests() {
   });
 
   var sheet = ss.getSheetByName(GUESTS_SHEET);
-  if (sheet) {
-    sheet.copyTo(ss).setName(GUESTS_SHEET + ' before ' +
-      Utilities.formatDate(new Date(), 'Asia/Manila', 'MM-dd HH:mm'));
-    sheet.clear();
-  } else {
-    sheet = ss.insertSheet(GUESTS_SHEET);
-  }
+  if (sheet) sheet.clear();
+  else sheet = ss.insertSheet(GUESTS_SHEET);
   sheet.getRange(1, 1, 1, GUESTS_COLUMNS.length).setValues([GUESTS_COLUMNS]).setFontWeight('bold');
   sheet.setFrozenRows(1);
   sheet.getRange(2, 1, rows.length, GUESTS_COLUMNS.length).setValues(rows);

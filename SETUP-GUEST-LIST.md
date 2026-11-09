@@ -97,6 +97,13 @@ deployed version until you cut a new one.
 `buildGuests()` fills the `GUESTS` tab from the `GUEST LIST` seating chart.
 Run it again (function dropdown → `buildGuests` → Run) whenever the chart
 changes. It never writes to `GUEST LIST`, so the seating plan is safe.
+`syncRoster()` does the same for `CONFIRMED GUESTS`, carrying every answer
+across by name.
+
+Both rewrite their tab in place and leave no copy beside it. They used to
+leave one each time, as "GUESTS before 10-28 23:34" and the like; any of those
+still in the sheet are old snapshots nothing reads, and can be deleted. To undo
+a run, use **File → Version history** in the sheet.
 
 Last run: 196 guests, 174 households, 18 tables.
 
