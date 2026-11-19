@@ -98,7 +98,13 @@ deployed version until you cut a new one.
 Run it again (function dropdown → `buildGuests` → Run) whenever the chart
 changes. It never writes to `GUEST LIST`, so the seating plan is safe.
 `syncRoster()` does the same for `CONFIRMED GUESTS`, carrying every answer
-across by name.
+across by name. The easy way to run it is the **Update CONFIRMED GUESTS**
+button at the top of the manager's **Replies** tab: it does the same rebuild
+through the website, as the script's owner, and says how many guests, tables
+and answers it found. Running `syncRoster` from the Apps Script editor works
+too, but the editor tends to fail with "An unknown error has occurred, please
+try again later" in a browser signed into more than one Google account; if it
+does, use the button, or an Incognito window signed into the sheet's owner.
 
 Both rewrite their tab in place and leave no copy beside it. They used to
 leave one each time, as "GUESTS before 10-28 23:34" and the like; any of those
