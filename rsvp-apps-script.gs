@@ -98,12 +98,19 @@ function doPost(e) {
       clean_(p.sent)
     ]);
 
+    /* Waits out a roster rebuild, so the answer is not written into rows that
+       are about to be replaced. If the wait runs long it goes ahead anyway:
+       a guest is never refused over the roster. */
+    var lock = LockService.getScriptLock();
+    var held = lock.tryLock(15000);
     try {
       markRoster_(p.party ? String(p.party).split(',') : [p.name],
                   String(p.attending).toLowerCase() === 'yes');
     } catch (rosterErr) {
       // The reply is already recorded. A roster that cannot be reached is
       // worth fixing later, not worth refusing the guest over.
+    } finally {
+      if (held) lock.releaseLock();
     }
 
     return json_({ ok: true });
@@ -404,7 +411,12 @@ function json_(obj) {
 
 /**
  * Rebuilds the roster from the seating chart, so a guest added to the chart
- * appears here too. Run it from the editor; nothing calls it on its own.
+ * appears here too. Nothing calls it on its own. There are two ways to run it:
+ * the Update CONFIRMED GUESTS button on the Replies tab of manage.html, or this
+ * function from the editor. The button goes through the website and runs as
+ * the script's owner, so it works whichever Google accounts the browser is
+ * signed into; the editor can fail with "An unknown error has occurred" when
+ * there is more than one.
  *
  * Answers already given are carried across by name, and a name appearing more
  * than once keeps its answers in order, so three rows of one placeholder stay
@@ -415,11 +427,24 @@ function json_(obj) {
  * read. The way back from a bad run is File -> Version history instead.
  */
 function syncRoster() {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var s = syncRoster_();
+    Logger.log('Rebuilt ' + ROSTER_SHEET + ': ' + s.guests + ' guests across ' + s.tables +
+      ' tables. Answers carried over: ' + s.carried + '. To undo, use File -> Version history.');
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** The rebuild itself, shared by the editor and the website. The caller
+ *  holds the script lock, so a guest's reply cannot land in the middle. */
+function syncRoster_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var guests = readGuests_();
   if (!guests.length) {
-    Logger.log('Read nothing from "' + GUEST_SHEET + '". Nothing was changed.');
-    return;
+    throw new Error('Read nothing from "' + GUEST_SHEET + '". Nothing was changed.');
   }
 
   var sheet = ss.getSheetByName(ROSTER_SHEET);
@@ -442,31 +467,39 @@ function syncRoster() {
     byTable[g.table].push(g.name);
   });
 
-  var rows = [], heads = [], pending = [], carried = 0;
+  var rows = [], head = {}, pend = {}, carried = 0, waiting = 0;
   order.forEach(function (table) {
-    heads.push(rows.length + 1);
+    head[rows.length] = true;
     rows.push([table, '']);
     rows.push(['', '']);
     byTable[table].forEach(function (name, i) {
       var k = rosterName_(name);
       var had = (answers[k] && answers[k].length) ? answers[k].shift() : 'Pending';
-      if (had.toLowerCase() !== 'pending') carried++;
-      if (had.toLowerCase() === 'pending') pending.push(rows.length + 1);
+      if (had.toLowerCase() === 'pending') { pend[rows.length] = true; waiting++; }
+      else carried++;
       rows.push([(i + 1) + '. ' + name, had]);
     });
     rows.push(['', '']);
   });
 
-  sheet.clear();
-  sheet.getRange(1, 1, rows.length, 2).setValues(rows);
-  heads.forEach(function (r) { sheet.getRange(r, 1).setFontWeight('bold'); });
-  pending.forEach(function (r) { sheet.getRange(r, ROSTER_STATUS_COL).setBackground('#FCE5CD'); });
+  /* Written in one go over the old rows, rather than clearing the tab first,
+     so the roster is never empty while this runs. Rows past the new end are
+     blanked in the same write. Bold headings and the Pending fill go on in
+     one call each, not one per row, which is what used to make this slow. */
+  var height = Math.max(rows.length, sheet.getLastRow(), 1);
+  var vals = [], weights = [], fills = [];
+  for (var r = 0; r < height; r++) {
+    vals.push(rows[r] || ['', '']);
+    weights.push([head[r] ? 'bold' : 'normal', 'normal']);
+    fills.push([null, pend[r] ? '#FCE5CD' : null]);
+  }
+  sheet.getRange(1, 1, height, 2).setValues(vals).setFontWeights(weights).setBackgrounds(fills);
+  var extra = sheet.getLastColumn() - 2;
+  if (extra > 0) sheet.getRange(1, 3, height, extra).clear();
   sheet.setColumnWidth(1, 260);
   sheet.setFrozenRows(0);
 
-  Logger.log('Rebuilt ' + ROSTER_SHEET + ': ' + guests.length + ' guests across ' +
-    order.length + ' tables. Answers carried over: ' + carried +
-    '. To undo, use File -> Version history.');
+  return { guests: guests.length, tables: order.length, carried: carried, pending: waiting };
 }
 
 /* --------------------------------------------------------------- migration */
@@ -689,6 +722,8 @@ function adminApi_(p) {
       case 'saveCheck':    return checkWrite_(function () { checkSave_(args[0]); });
       case 'addCheck':     return checkWrite_(function () { checkAdd_(args[0]); });
       case 'removeCheck':  return checkWrite_(function () { checkRemove_(args[0]); });
+
+      case 'syncRoster':   return adminRoster_();
     }
     return json_({ ok: false, error: 'unknown request' });
   } catch (err) {
@@ -708,6 +743,18 @@ function adminWrite_(fn) {
   try {
     fn();
     return json_({ ok: true, data: adminAll_() });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** The Update CONFIRMED GUESTS button: the same rebuild as syncRoster() in
+ *  the editor, answered with how it went. */
+function adminRoster_() {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    return json_({ ok: true, data: syncRoster_() });
   } finally {
     lock.releaseLock();
   }

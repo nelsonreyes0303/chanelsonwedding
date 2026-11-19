@@ -453,9 +453,46 @@ function viewTables(){
   return out + '</main></div>';
 }
 
+/* Rebuilds the CONFIRMED GUESTS tab of the sheet from the seating chart. It
+   runs on the server as the script's owner, which is what makes it work where
+   running syncRoster in the Apps Script editor fails with "An unknown error
+   has occurred" in a browser signed into more than one Google account. */
+var syncing = false, syncMsg = '';
+function syncRoster(){
+  if(syncing) return;
+  if(!confirm('Update the CONFIRMED GUESTS tab from the seating chart (GUEST LIST)?\n\n' +
+              'Every Yes and No already in is kept. New names start as Pending.')) return;
+  syncing = true; syncMsg = ''; render();
+  post('syncRoster').then(function(res){
+    syncing = false;
+    if(res && res.ok){
+      var s = res.data;
+      syncMsg = 'Updated: '+s.guests+' guests across '+s.tables+' tables. '+
+        s.carried+(s.carried===1?' answer':' answers')+' kept, '+s.pending+' still Pending.';
+      flash(); render(); return;
+    }
+    if(res && res.error==='auth'){ lockOut('That sign-in has expired.'); return; }
+    syncMsg = res && res.error==='unknown request'
+      ? 'This needs the updated script. Paste it into Apps Script and deploy a new version first.'
+      : 'Could not update: ' + ((res && res.error) || 'the guest list did not answer');
+    render();
+  }).catch(function(){
+    syncing = false;
+    syncMsg = 'Could not reach the guest list. Check your connection, then try again.';
+    render();
+  });
+}
+
 function viewReplies(){
   var wait = D.guests.filter(function(g){return g.status==='No reply'}).length;
-  var out = '<div class="note"><strong>Still waiting on '+wait+' guests</strong>' +
+  var out = '<div class="note"><strong>CONFIRMED GUESTS tab</strong>' +
+    '<div class="hmeta" style="margin-top:4px">Rebuild it from the seating chart (GUEST LIST) after the chart changes. ' +
+    'Answers already in are kept.</div>' +
+    '<div style="margin-top:9px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">' +
+    '<button class="btn" id="sync"'+(syncing?' disabled':'')+'>'+(syncing?'Updating&hellip;':'Update CONFIRMED GUESTS')+'</button>' +
+    (syncMsg?'<span class="hmeta" id="syncmsg" role="status">'+esc(syncMsg)+'</span>':'') +
+    '</div></div>' +
+    '<div class="note"><strong>Still waiting on '+wait+' guests</strong>' +
     '<div style="margin-top:9px"><button class="btn ghost" id="copy">Copy their names</button></div></div>';
   if(!D.replies.length) return out + '<div class="empty"><h3>No replies yet</h3></div>';
   return out + D.replies.map(function(r){
@@ -710,6 +747,7 @@ function bind(){
   var chk = document.getElementById('chk'); if(chk) chk.onclick=checkPlan;
   var addt = document.getElementById('addt'); if(addt) addt.onclick=addTable;
   var cp = document.getElementById('copy'); if(cp) cp.onclick=copyWaiting;
+  var sy = document.getElementById('sync'); if(sy) sy.onclick=syncRoster;
 }
 function rowsOfSelection(){
   var rows = [];
